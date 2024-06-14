@@ -1898,8 +1898,7 @@ def FuncMultiCmpt(pmc='pmc', pair='unpair', data=None, dv=None, factor=None,
 # df = pd.DataFrame({'score': [64, 66, 68, 75, 78, 94, 98, 79, 71, 80,
 #                              91, 92, 93, 90, 97, 94, 82, 88, 95, 96,
 #                              79, 78, 88, 94, 92, 85, 83, 85, 82, 81],
-#                    'group': np.repeat(['strat1', 'strat2', 'strat3'],
-#                                       repeats=10)})
+#                    'group': np.repeat(['strat1', 'strat2', 'strat3'],repeats=10)})
 # out1 = FuncMultiCmpt(pmc='auto',pair='unpaired',data=df, dv='score', factor='group', group='group')
 # =============================================================================
 # # two way anova

@@ -90,8 +90,6 @@ paper_size('card') # [85.6, 53.98]
 
 ### str2num, num2str, str2list
 
-e.g., 
-
 ```python
 str2num(“123.345 dollers”,2)# => 123.35 (float) 
 ```
@@ -101,10 +99,8 @@ str2list("abcd") # ['a','b','c','d']
 ```
 
 ```python
-list2str(x_str)
+list2str(['a','b','c','d']) # 'abcd'
 ```
-
-
 
 ### ssplit, sreplace
 
@@ -158,7 +154,23 @@ ssplit(text, by="lowup")
 
 ```
 
+```python
+sreplace(text, dict_replace=None, robust=True)
+```
 
+```python
+text= 'The most pronounced physiological changes in sleep occur in the brain.[10] '
+ 'The brain uses significantly less energy during sleep than it does when '
+ 'awake, especially during non-REM sleep. In areas with reduced activity, the '
+ 'brain restores its supply of adenosine triphosphate (ATP), the molecule used '
+ 'for short-term storage and transport of energy.[11] In quiet waking, the '
+ "brain is responsible for 20% of the body's energy use, thus this reduction "
+ 'has a noticeable effect on overall energy consumption.[12]'
+sreplace(text)
+"The most pronounced physiological changes in sleep occur in the brain"
+sreplace(text,{"sleep":"wakewake"}) # sreplace(text,dict(sleep="wakewake"))
+"The most pronounced physiological changes in wakewake occur in the brain."
+```
 
 ### stats
 
@@ -166,6 +178,17 @@ ssplit(text, by="lowup")
 
 ```python
 FuncCmpt(X1, X2, pmc='auto', pair='unpaired')
+e.g., 
+X1 = [19, 22, 16, 29, 24]
+X2 = [20, 11, 17, 12, 22]
+p, res = FumcCmpt(X1,X2, pmc='pmc', pair = 'unpair')
+# normally distributed
+# normally distributed
+# unpaired t text
+# t(8) = 1.81117, p=0.1077
+p,res = FuncCmpt(x1,x2, pmc='pmc',pair='pair')
+# paired t test
+# t(4)=1.55556,p=0.19479
 ```
 
 #### FuncMultiCmpt ( multiple groups cmp)
@@ -178,7 +201,15 @@ FuncMultiCmpt(pmc='pmc', pair='unpair', data=None, dv=None, factor=None,
                   )
 ```
 
-
+```python
+df = pd.DataFrame({'score': [64, 66, 68, 75, 78, 94, 98, 79, 71, 80,
+                             91, 92, 93, 90, 97, 94, 82, 88, 95, 96,
+                             79, 78, 88, 94, 92, 85, 83, 85, 82, 81],
+                   'group': np.repeat(['strat1', 'strat2', 'strat3'],repeats=10)})
+res = FuncMultiCmpt(pmc='auto',pair='unpaired',data=df, dv='score', factor='group', group='group')
+res["APA"] 
+# ['group:F(2, 17)=9.71719,p=0.0016']
+```
 
 #### FuncStars
 
@@ -207,6 +238,9 @@ FuncStars(ax,
               report=None,
               report_scale=-0.1,
               report_loc=None)
+
+
+
 ```
 
 ### plots
