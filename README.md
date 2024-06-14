@@ -8,13 +8,13 @@ pip install py2ls
 
 # ips
 
-### listdir, basename, dirname, newfolder
+### listdir, basename, dirname, newfolder, finfo
 
 e.g., 
 
 ```python
 fpath = "....../"
-ips.listdir(fpath, kind='pdf', sort_by="size", ascending=0, output = df)
+ips.listdir(fpath, kind='pdf', sort_by="size", ascending=0, output = 'df')
 ```
 
 it filters the ‘.pdf’ files, and sort by the (file-size/name, length of name, create_time, mod_time, last_open_time …) it returns a DataFrame or BoxList (setting by ‘output’)
@@ -245,7 +245,10 @@ get_color(12)
 #  '#58BBCC']
 ```
 
-
+```python
+get_color(5, cmap="jet") # ['#000080', '#000084', '#000089', '#00008d', '#000092']
+get_color(5,cmap="rainbow") #['#8000ff', '#7e03ff', '#7c06ff', '#7a09ff', '#780dff']
+```
 
 #### img appearance
 
