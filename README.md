@@ -1,4 +1,12 @@
-## ips
+# Install
+
+```sh
+pip install py2ls
+```
+
+
+
+# ips
 
 ### listdir, basename, dirname, newfolder
 
