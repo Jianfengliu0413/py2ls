@@ -778,36 +778,6 @@ def dir_name(fpath):
     return dirname(fpath)
 def basename(fpath):
     return os.path.basename(fpath)
-
-def finfo(fpath):
-    fname, fmt = os.path.splitext(fpath)
-    dir_par = os.path.dirname(fpath) + '/'
-    data = {
-        "size": round(os.path.getsize(fpath) / 1024 / 1024, 3),
-        "creation_time": time.ctime(os.path.getctime(fpath)),
-        "ctime": time.ctime(os.path.getctime(fpath)),
-        "mod_time": time.ctime(os.path.getmtime(fpath)),
-        "mtime": time.ctime(os.path.getmtime(fpath)),
-        "parent_dir": dir_par,
-        "fname": fname.replace(dir_par, ""),
-        "kind": fmt
-    }
-    extra_info = {}
-    if data["kind"] == ".pdf":
-        extra_info = pdfinfo_from_path(fpath)
-    
-    return FileInfo(
-        size=data["size"],
-        creation_time=data["creation_time"],
-        ctime=data["ctime"],
-        mod_time=data["mod_time"],
-        mtime=data["mtime"],
-        parent_dir=data["parent_dir"],
-        fname=data["fname"],
-        kind=data["kind"],
-        extra_info=extra_info
-    )
-
 def listdir(
     rootdir,
     kind="folder",
@@ -2841,3 +2811,32 @@ class FileInfo:
             "kind": self.kind,
             **{key: getattr(self, key) for key in vars(self) if key not in ["size", "creation_time", "ctime", "mod_time", "mtime", "parent_dir", "fname", "kind"]}
         }
+
+def finfo(fpath):
+    fname, fmt = os.path.splitext(fpath)
+    dir_par = os.path.dirname(fpath) + '/'
+    data = {
+        "size": round(os.path.getsize(fpath) / 1024 / 1024, 3),
+        "creation_time": time.ctime(os.path.getctime(fpath)),
+        "ctime": time.ctime(os.path.getctime(fpath)),
+        "mod_time": time.ctime(os.path.getmtime(fpath)),
+        "mtime": time.ctime(os.path.getmtime(fpath)),
+        "parent_dir": dir_par,
+        "fname": fname.replace(dir_par, ""),
+        "kind": fmt
+    }
+    extra_info = {}
+    if data["kind"] == ".pdf":
+        extra_info = pdfinfo_from_path(fpath)
+    
+    return FileInfo(
+        size=data["size"],
+        creation_time=data["creation_time"],
+        ctime=data["ctime"],
+        mod_time=data["mod_time"],
+        mtime=data["mtime"],
+        parent_dir=data["parent_dir"],
+        fname=data["fname"],
+        kind=data["kind"],
+        extra_info=extra_info
+    )
