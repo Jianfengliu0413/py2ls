@@ -1,6 +1,6 @@
 # Install
 
-```sh
+```python
 pip install py2ls
 ```
 
