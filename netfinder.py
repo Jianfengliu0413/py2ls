@@ -20,7 +20,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-
+import pprint
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -344,7 +344,7 @@ def pdf_detector(url, contains=None, dir_save=None,booster=False):
             pdf_links = filter_links(links=links_all, contains=["pdf"])
 
     if pdf_links:
-        print(f"pdf detected\n{pdf_links}")
+        pprint.pp(f"pdf detected\n{pdf_links}")
     else:
         print('no pdf file')
     if dir_save:
