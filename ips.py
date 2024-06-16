@@ -37,6 +37,7 @@ from box import Box, BoxList
 from numerizer import numerize
 from tqdm import tqdm
 import mimetypes
+from pprint import pp
 
 def str2num(s, *args):
     delimiter = None
@@ -2188,6 +2189,7 @@ def apply_filter(img, *args):
             raise ValueError(
                 f"Unsupported filter: {filter_name}, should be one of: {supported_filters}"
             )
+
     for arg in args:
         if isinstance(arg, str):
             filter_name = arg
@@ -2286,6 +2288,29 @@ def imgsets(
     Note:
         The "color" and "enhance" enhancements are not implemented in this function.
     """
+    supported_filters = [
+                "BLUR",
+                "CONTOUR",
+                "DETAIL",
+                "EDGE_ENHANCE",
+                "EDGE_ENHANCE_MORE",
+                "EMBOSS",
+                "FIND_EDGES",
+                "SHARPEN",
+                "SMOOTH",
+                "SMOOTH_MORE",
+                "MIN_FILTER",
+                "MAX_FILTER",
+                "MODE_FILTER",
+                "MULTIBAND_FILTER",
+                "GAUSSIAN_BLUR",
+                "BOX_BLUR",
+                "MEDIAN_FILTER",
+            ]
+    print("sets: a dict,'sharp:1.2','color','contrast:'auto' or 1.2','bright', 'crop: x_upperleft,y_upperleft, x_lowerright, y_lowerright','rotation','resize','rem or background'")
+    print(f"usage: filter_kws 'dict' below:")
+    pp([str(i).lower() for i in supported_filters])
+    print("\nlog:\n")
     def confirm_rembg_models(model_name):
         models_support = [
             "u2net",
