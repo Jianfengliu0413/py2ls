@@ -450,7 +450,6 @@ def content_div_class(content, div="div", div_class="highlight"):
     return texts
 
 
-
 def fetch_selenium(
     url,
     where="div",
@@ -468,7 +467,11 @@ def fetch_selenium(
     username_by=By.NAME,
     password_by=By.NAME,
     submit_by=By.NAME,
+    cap_mode='eager', # eager or none
     proxy=None,  # Add proxy parameter
+    javascript=True,  # Add JavaScript option
+    disable_images=False,  # Add option to disable images
+    iframe_name=None,  # Add option to handle iframe
     **kwargs
 ):
     chrome_options = Options()
@@ -476,13 +479,25 @@ def fetch_selenium(
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument(f"user-agent={user_agent()}")
+    
     if proxy:
         chrome_options.add_argument(f'--proxy-server={proxy}')
+    
+    if disable_images:
+        prefs = {"profile.managed_default_content_settings.images": 2}
+        chrome_options.add_experimental_option("prefs", prefs)
+    
+    caps = DesiredCapabilities().CHROME
+    caps["pageLoadStrategy"] = "eager"  # You can set this to "none" if needed
 
-    service = Service(ChromeDriverManager().install()) 
+    service = Service(ChromeDriverManager().install())
     for attempt in range(retry):
         try:
-            driver = webdriver.Chrome(service=service, options=chrome_options)
+            driver = webdriver.Chrome(service=service, options=chrome_options, desired_capabilities=caps)
+            
+            if not javascript:
+                driver.execute_cdp_cmd("Emulation.setScriptExecutionDisabled", {"value": True})
+
             if login_url:
                 driver.get(login_url)
                 WebDriverWait(driver, timeout).until(
@@ -496,6 +511,13 @@ def fetch_selenium(
                 ).click()
 
             driver.get(url)
+            
+            if iframe_name:
+                iframe = WebDriverWait(driver, timeout).until(
+                    EC.presence_of_element_located((By.NAME, iframe_name))
+                )
+                driver.switch_to.frame(iframe)
+
             WebDriverWait(driver, timeout).until(
                 EC.presence_of_element_located((by, where))
             )
@@ -503,7 +525,7 @@ def fetch_selenium(
             driver.quit()
 
             content = BeautifulSoup(page_source, "html.parser")
-            texts=extract_text_from_content(content, where=where,what=what,extend=extend,**kwargs)
+            texts = extract_text_from_content(content, where=where, what=what, extend=extend, **kwargs)
             return texts
         except Exception as e:
             # logger.error(f"Attempt {attempt + 1} failed with error ")
