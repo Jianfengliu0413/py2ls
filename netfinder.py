@@ -20,7 +20,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import pprint
+import mimetypes
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -42,61 +44,22 @@ def user_agent(browsers=["chrome", "edge", "firefox", "safari"], platforms=["pc"
     output_ua = ua.random
     if verbose:
         print(output_ua)
-    return output_ua
-# def extract_text_from_content(content,where,what,extend=False):
-#     if extend:
-#         texts = ""
-
-#         def extract_text(element):
-#             nonlocal texts
-#             if isinstance(element, str) and element.strip():
-#                 texts += element.strip()
-#             elif hasattr(element, "children"):
-#                 for child in element.children:
-#                     extract_text(child)
-
-#         result_set = (
-#             content.find_all(where, class_=what)
-#             if what
-#             else content.find_all(where)
-#         )
-#         for tag in result_set:
-#             extract_text(tag)
-
-#         text = [tx for tx in texts.split("\n") if tx]
-#         return text
-#     else:
-#         result_set = (
-#             content.find_all(where, class_=what)
-#             if what
-#             else content.find_all(where)
-#         )
-#         texts_ = " ".join(tag.get_text() + "\n" for tag in result_set)
-#         texts = [tx.strip() for tx in texts_.split("\n") if tx]
-#         return texts
-# def extract_text_from_content(content, where, what=None, extend=True):
-#     if extend:
-#         def extract_text(element):
-#             texts = ""
-#             if isinstance(element, str) and element.strip():
-#                 texts += element.strip()
-#             elif hasattr(element, "children"):
-#                 for child in element.children:
-#                     texts += extract_text(child)
-#             return texts
-
-#         result_set = content.find_all(where, class_=what) if what else content.find_all(where)
-#         texts = ""
-#         for tag in result_set:
-#             texts += extract_text(tag) + "\n"
-#         text_list = [tx.strip() for tx in texts.split("\n") if tx.strip()]
-#         return text_list
-#     else:
-#         result_set = content.find_all(where, class_=what) if what else content.find_all(where)
-#         texts_ = " ".join(tag.get_text() for tag in result_set)
-#         texts = [tx.strip() for tx in texts_.split("\n") if tx.strip()]
-#         return texts
+    return output_ua 
 def extract_text_from_content(content, content_type="text/html", where=None, what=None, extend=True, **kwargs):
+    """
+    Extracts text from the given content based on the specified content type and search criteria.
+
+    Parameters:
+    - content (str/BeautifulSoup): The content to extract text from.
+    - content_type (str): The type of content, e.g., "text/html" or "application/json".
+    - where (str/list): The HTML tag or list of tags to search for.
+    - what (str): The class name to filter the tags (optional).
+    - extend (bool): Whether to recursively extract text from child elements.
+    - **kwargs: Additional keyword arguments for the search (e.g., id, attributes).
+
+    Returns:
+    - list: A list of extracted text segments.
+    """
     if content is None:
         logger.error("Content is None, cannot extract text.")
         return []
@@ -109,35 +72,41 @@ def extract_text_from_content(content, content_type="text/html", where=None, wha
         where = None
         return extract_text_from_json(content, where)
     elif 'text' in content_type:
-        if extend:
-            def extract_text(element):
-                texts = ""
-                if isinstance(element, str) and element.strip():
-                    texts += element.strip()
-                elif hasattr(element, "children"):
-                    for child in element.children:
-                        texts += extract_text(child)
-                return texts
-
-            search_kwargs = {**kwargs}
-            if what:
-                search_kwargs["class_"] = what
-
-            result_set = content.find_all(where, **search_kwargs)
-            texts = ""
-            for tag in result_set:
-                texts += extract_text(tag) + "\n"
-            text_list = [tx.strip() for tx in texts.split("\n") if tx.strip()]
-            return text_list
+        if isinstance(where, list):
+            res=[]
+            for where_ in where:
+                res.extend(extract_text_from_content(content, content_type="text/html", where=where_, what=what, extend=extend, **kwargs))
+            return res
         else:
-            search_kwargs = {**kwargs}
-            if what:
-                search_kwargs["class_"] = what
+            if extend:
+                def extract_text(element):
+                    texts = ""
+                    if isinstance(element, str) and element.strip():
+                        texts += element.strip()
+                    elif hasattr(element, "children"):
+                        for child in element.children:
+                            texts += extract_text(child)
+                    return texts
 
-            result_set = content.find_all(where, **search_kwargs)
-            texts_ = " ".join(tag.get_text() for tag in result_set)
-            texts = [tx.strip() for tx in texts_.split("\n") if tx.strip()]
-            return texts
+                search_kwargs = {**kwargs}
+                if what:
+                    search_kwargs["class_"] = what
+
+                result_set = content.find_all(where, **search_kwargs)
+                texts = ""
+                for tag in result_set:
+                    texts += extract_text(tag) + "\n"
+                text_list = [tx.strip() for tx in texts.split("\n") if tx.strip()]
+                return text_list
+            else:
+                search_kwargs = {**kwargs}
+                if what:
+                    search_kwargs["class_"] = what
+
+                result_set = content.find_all(where, **search_kwargs)
+                texts_ = " ".join(tag.get_text() for tag in result_set)
+                texts = [tx.strip() for tx in texts_.split("\n") if tx.strip()]
+                return texts
 
 def extract_text_from_json(content, key=None):
     if key:
@@ -366,7 +335,7 @@ def pdf_detector(url, contains=None, dir_save=None,booster=False):
         print(f'{len(fnames)} files are downloaded:\n{fnames}\n to local: \n{dir_save}')
 
 
-def find_img(url, dir_save="images"):
+def find_img(url, dir_save="images", verbose=True):
     """
     Save images referenced in HTML content locally.
     Args:
@@ -381,7 +350,6 @@ def find_img(url, dir_save="images"):
     if "html" in content_type.lower():
         # Create the directory if it doesn't exist
         os.makedirs(dir_save, exist_ok=True)
-
         # Parse HTML content if it's not already a BeautifulSoup object
         if isinstance(content, str):
             content = BeautifulSoup(content, "html.parser")
@@ -390,13 +358,9 @@ def find_img(url, dir_save="images"):
         images = content.find_all("img", src=True)
         for i, image in enumerate(images):
             try:
-                # Get the image URL
                 image_url = image["src"]
-
                 if image_url.startswith("data:image"):
-                    # Extract the image data from the data URI
                     mime_type, base64_data = image_url.split(",", 1)
-                    # Determine the file extension from the MIME type
                     if ":" in mime_type:
                         # image_extension = mime_type.split(":")[1].split(";")[0]
                         image_extension = (
@@ -406,44 +370,68 @@ def find_img(url, dir_save="images"):
                         image_extension = (
                             "png"  # Default to PNG if extension is not specified
                         )
-                    # if 'svg+xml' in image_extension:
-                    #     image_extension='svg'
                     image_data = base64.b64decode(base64_data)
-                    # Save the image data to a file
                     image_filename = os.path.join(
                         dir_save, f"image_{i}.{image_extension}"
                     )
                     with open(image_filename, "wb") as image_file:
                         image_file.write(image_data)
-
-                    # Update the src attribute of the image tag to point to the local file
                     image["src"] = image_filename
+                    if verbose:
+                        plt.imshow(image_data)
                 else:
                     # Construct the absolute image URL
                     absolute_image_url = urljoin(url, image_url)
-
                     # Parse the image URL to extract the file extension
                     parsed_url = urlparse(absolute_image_url)
                     image_extension = os.path.splitext(parsed_url.path)[1]
-
                     # Download the image
                     image_response = requests.get(absolute_image_url,proxies=proxies_glob)
-
                     # Save the image to a file
                     image_filename = os.path.join(
                         dir_save, f"image_{i}{image_extension}"
                     )
                     with open(image_filename, "wb") as image_file:
                         image_file.write(image_response.content)
-
                     # Update the src attribute of the image tag to point to the local file
                     image["src"] = image_filename
             except (requests.RequestException, KeyError) as e:
                 print(f"Failed to process image {image_url}: {e}")
         print(f"images were saved at\n{dir_save}")
-    # Return the HTML content with updated image URLs
+        if verbose:
+            display_thumbnail_figure(flist(dir_save,filter='img'),dpi=200)
     return content
 
+def display_thumbnail_figure(dir_img_list,figsize=(10,10),dpi=100):
+    import matplotlib.pyplot as plt
+    from PIL import Image
+    """
+    Display a thumbnail figure of all images in the specified directory.
+    Args:
+        dir_img_list (list): List of the Directory containing the images.
+    """
+    num_images = len(dir_img_list)
+
+    if num_images == 0:
+        print("No images found to display.")
+        return
+
+    # Determine grid size
+    grid_size = int(num_images ** 0.5) + 1
+
+    fig, axs = plt.subplots(grid_size, grid_size, figsize=figsize,dpi=dpi)
+
+    for ax, image_file in zip(axs.flatten(), dir_img_list):
+        img = Image.open(image_file)
+        ax.imshow(img)
+        ax.axis('off')  # Hide axes
+
+    # Hide remaining subplots
+    for ax in axs.flatten()[num_images:]:
+        ax.axis('off')
+
+    plt.tight_layout()
+    plt.show()
 
 def content_div_class(content, div="div", div_class="highlight"):
     texts = [div.text for div in content.find_all(div, class_=div_class)]
@@ -467,7 +455,7 @@ def fetch_selenium(
     username_by=By.NAME,
     password_by=By.NAME,
     submit_by=By.NAME,
-    cap_mode='eager', # eager or none
+    # capability='eager', # eager or none
     proxy=None,  # Add proxy parameter
     javascript=True,  # Add JavaScript option
     disable_images=False,  # Add option to disable images
@@ -479,21 +467,16 @@ def fetch_selenium(
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument(f"user-agent={user_agent()}")
-    
     if proxy:
         chrome_options.add_argument(f'--proxy-server={proxy}')
-    
     if disable_images:
         prefs = {"profile.managed_default_content_settings.images": 2}
         chrome_options.add_experimental_option("prefs", prefs)
-    
-    caps = DesiredCapabilities().CHROME
-    caps["pageLoadStrategy"] = "eager"  # You can set this to "none" if needed
-
+    # chrome_options.page_load_strategy = capability
     service = Service(ChromeDriverManager().install())
     for attempt in range(retry):
         try:
-            driver = webdriver.Chrome(service=service, options=chrome_options, desired_capabilities=caps)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
             
             if not javascript:
                 driver.execute_cdp_cmd("Emulation.setScriptExecutionDisabled", {"value": True})
@@ -540,36 +523,19 @@ def fetch_selenium(
 
 
 def fetch(url, where="div", what=None, extend=True, booster=False,retry=2,verbose=False, **kws):
-    # for attempt in range(retry):
-    #     if verbose and attempt==0:
-    #         xample = 'fetch(url,where="div",what=None,extend=True,by=By.TAG_NAME,timeout=10,retry=3,login_url=None,username=None,password=None,username_field="username",password_field="password",submit_field="submit",username_by=By.NAME,password_by=By.NAME,submit_by=By.NAME)'
-    #         print(xample)
-    #     content_type, content = fetch_all(url, parser="html.parser")
-    #     texts=extract_text_from_content(content,content_type=content_type,where=where,what=what,extend=extend, **kws)
-    #     if isinstance(texts,pd.core.frame.DataFrame):
-    #         condition=[texts.empty, attempt != retry - 1]
-    #     else:
-    #         condition=[not texts, attempt != retry - 1]
-    #     if all(condition):
-    #         texts = fetch(url=url, where=where, what=what, extend=extend, retry=retry-1, **kws)
-    #     sleep(random.uniform(0.5, 1.5))
     for attempt in range(retry):
         if verbose and attempt==0:
             xample = 'fetch(url,where="div",what=None,extend=True,by=By.TAG_NAME,timeout=10,retry=3,login_url=None,username=None,password=None,username_field="username",password_field="password",submit_field="submit",username_by=By.NAME,password_by=By.NAME,submit_by=By.NAME)'
             print(xample)
         content_type, content = fetch_all(url, parser="html.parser")
         texts=extract_text_from_content(content,content_type=content_type,where=where,what=what,extend=extend, **kws)
-        if isinstance(texts, pd.core.frame.DataFrame):
-            # condition=[texts.empty, attempt != retry - 1]
+        if isinstance(texts, pd.core.frame.DataFrame): 
             if not texts.empty:
                 break
-        else:
-            # condition=[not texts, attempt != retry - 1]
+        else: 
             if texts:
                 break
-        # if all(condition):
-        #     texts = fetch(url=url, where=where, what=what, extend=extend, retry=retry-1, **kws)
-        sleep(random.uniform(0.5, 1.5))
+            sleep(random.uniform(0.5, 1.5))
     if isinstance(texts,pd.core.frame.DataFrame):
         condition_=[texts.empty, booster]
     else:
@@ -800,3 +766,67 @@ def find_all(url, dir_save=None):
             df.to_csv(dir_save)
         print(f"file has been saved at\n{dir_save}")
     return df
+
+
+def flist(fpath, filter="all"):
+    all_files = [os.path.join(fpath, f) for f in os.listdir(fpath) if os.path.isfile(os.path.join(fpath, f))]
+    if isinstance(filter, list):
+        filt_files=[]
+        for filter_ in filter:
+            filt_files.extend(flist(fpath, filter_))
+        return filt_files
+    else:
+        if 'all' in filter.lower():
+            return all_files
+        else:
+            filt_files = [f for f in all_files if istype(f, filter)]
+        return filt_files
+
+def istype(fpath, filter='img'):
+    """
+    Filters file paths based on the specified filter.
+    Args:
+        fpath (str): Path to the file.
+        filter (str): filter of file to filter. Default is 'img' for images. Other options include 'doc' for documents,
+                    'zip' for ZIP archives, and 'other' for other types of files.
+    Returns:
+        bool: True if the file matches the filter, False otherwise.
+    """
+    if 'img' in filter.lower():
+        return is_image(fpath)
+    elif 'doc' in filter.lower():
+        return is_document(fpath)
+    elif 'zip' in filter.lower():
+        return is_zip(fpath)
+    else:
+        return False
+
+def is_image(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type and mime_type.startswith('image'):
+        return True
+    else:
+        return False
+
+def is_document(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type and (
+        mime_type.startswith('text/') or
+        mime_type == 'application/pdf' or
+        mime_type == 'application/msword' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
+        mime_type == 'application/vnd.ms-excel' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
+        mime_type == 'application/vnd.ms-powerpoint' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ):
+        return True
+    else:
+        return False
+
+def is_zip(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type == 'application/zip':
+        return True
+    else:
+        return False
