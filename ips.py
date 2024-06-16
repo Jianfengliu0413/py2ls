@@ -36,6 +36,7 @@ import time
 from box import Box, BoxList
 from numerizer import numerize
 from tqdm import tqdm
+import mimetypes
 
 def str2num(s, *args):
     delimiter = None
@@ -778,14 +779,15 @@ def dir_name(fpath):
     return dirname(fpath)
 def basename(fpath):
     return os.path.basename(fpath)
+
 def listdir(
     rootdir,
     kind="folder",
     sort_by="name",
     ascending=True,
     contains=None,
-    orient = "list",
-    output='df'
+    orient="list",
+    output="df"
 ):
     def sort_kind(df, by="name", ascending=True):
         if df[by].dtype == 'object':  # Check if the column contains string values
@@ -801,6 +803,69 @@ def listdir(
         sorted_df = df.iloc[sorted_index].reset_index(drop=True)
         return sorted_df
 
+    def flist(fpath, filter="all"):
+        all_files = [os.path.join(fpath, f) for f in os.listdir(fpath) if os.path.isfile(os.path.join(fpath, f))]
+        if isinstance(filter, list):
+            filt_files = []
+            for filter_ in filter:
+                filt_files.extend(flist(fpath, filter_))
+            return filt_files
+        else:
+            if 'all' in filter.lower():
+                return all_files
+            else:
+                filt_files = [f for f in all_files if istype(f, filter)]
+                return filt_files
+
+    def istype(fpath, filter='img'):
+        """
+        Filters file paths based on the specified filter.
+        Args:
+            fpath (str): Path to the file.
+            filter (str): Filter of file to filter. Default is 'img' for images. Other options include 'doc' for documents,
+                        'zip' for ZIP archives, and 'other' for other types of files.
+        Returns:
+            bool: True if the file matches the filter, False otherwise.
+        """
+        if 'img' in filter.lower():
+            return is_image(fpath)
+        elif 'doc' in filter.lower():
+            return is_document(fpath)
+        elif 'zip' in filter.lower():
+            return is_zip(fpath)
+        else:
+            return False
+
+    def is_image(fpath):
+        mime_type, _ = mimetypes.guess_type(fpath)
+        if mime_type and mime_type.startswith('image'):
+            return True
+        else:
+            return False
+
+    def is_document(fpath):
+        mime_type, _ = mimetypes.guess_type(fpath)
+        if mime_type and (
+            mime_type.startswith('text/') or
+            mime_type == 'application/pdf' or
+            mime_type == 'application/msword' or
+            mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
+            mime_type == 'application/vnd.ms-excel' or
+            mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
+            mime_type == 'application/vnd.ms-powerpoint' or
+            mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        ):
+            return True
+        else:
+            return False
+
+    def is_zip(fpath):
+        mime_type, _ = mimetypes.guess_type(fpath)
+        if mime_type == 'application/zip':
+            return True
+        else:
+            return False
+
     if not kind.startswith("."):
         kind = "." + kind
 
@@ -814,7 +879,7 @@ def listdir(
             "path": [],
             "created_time": [],
             "modified_time": [],
-            "last_open_time":[],
+            "last_open_time": [],
             "size": [],
             "fname": [],
             "fpath": [],
@@ -828,16 +893,20 @@ def listdir(
             is_file = kind.lower() in file_extension.lower() and (
                 os.path.isfile(item_path)
             )
-            if not is_folder and not is_file:
-                continue
+            if kind in ['.doc','.img','.zip']: #选择大的类别
+                if kind != ".folder" and not istype(item_path, kind):
+                    continue
+            else: #精确到文件的后缀
+                if not is_folder and not is_file:
+                    continue
             f["name"].append(filename)
             f["length"].append(len(filename))
             f["path"].append(os.path.join(os.path.dirname(item_path), item))
-            fpath=os.path.join(os.path.dirname(item_path), item)
+            fpath = os.path.join(os.path.dirname(item_path), item)
             f["size"].append(round(os.path.getsize(fpath) / 1024 / 1024, 3))
-            f["created_time"].append(pd.to_datetime(os.path.getctime(item_path),unit='s'))
-            f["modified_time"].append(pd.to_datetime(os.path.getmtime(item_path),unit='s'))
-            f['last_open_time'].append(pd.to_datetime(os.path.getatime(item_path),unit='s'))
+            f["created_time"].append(pd.to_datetime(os.path.getctime(item_path), unit='s'))
+            f["modified_time"].append(pd.to_datetime(os.path.getmtime(item_path), unit='s'))
+            f['last_open_time'].append(pd.to_datetime(os.path.getatime(item_path), unit='s'))
             f["fname"].append(filename)  # will be removed
             f["fpath"].append(fpath)  # will be removed
             i += 1
@@ -850,32 +919,35 @@ def listdir(
             'The directory "{}" does NOT exist. Please check the directory "rootdir".'.format(
                 rootdir
             )
-        ) 
+        )
+
     f = pd.DataFrame(f)
+
     if contains is not None:
-        f = f[f["name"].str.contains(contains,case=False)]
+        f = f[f["name"].str.contains(contains, case=False)]
+
     if "nam" in sort_by.lower():
-        # f.sort_values(by="name", ascending=ascending, ignore_index=True, inplace=True)
-        f=sort_kind(f, by="name", ascending=ascending)
+        f = sort_kind(f, by="name", ascending=ascending)
     elif "crea" in sort_by.lower():
-        f=sort_kind(f, by="created_time", ascending=ascending)
+        f = sort_kind(f, by="created_time", ascending=ascending)
     elif "modi" in sort_by.lower():
-        f=sort_kind(f, by="modified_time", ascending=ascending)
+        f = sort_kind(f, by="modified_time", ascending=ascending)
     elif "s" in sort_by.lower() and "z" in sort_by.lower():
-        f=sort_kind(f, by="size", ascending=ascending)
+        f = sort_kind(f, by="size", ascending=ascending)
+
     if 'df' in output:
         return f
     else:
-        if 'l' in orient.lower(): # list # default
+        if 'l' in orient.lower():  # list # default
             res_output = Box(f.to_dict(orient="list"))
             return res_output
-        if 'd' in orient.lower(): # dict
+        if 'd' in orient.lower():  # dict
             return Box(f.to_dict(orient="dict"))
-        if 'r' in orient.lower(): # records
+        if 'r' in orient.lower():  # records
             return Box(f.to_dict(orient="records"))
-        if 'in' in orient.lower(): # records
+        if 'in' in orient.lower():  # records
             return Box(f.to_dict(orient="index"))
-        if 'se' in orient.lower(): # records
+        if 'se' in orient.lower():  # records
             return Box(f.to_dict(orient="series"))
 
 # Example usage:
