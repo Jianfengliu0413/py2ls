@@ -15,7 +15,7 @@ from scipy import stats
 import matplotlib.ticker as tck 
 from cycler import cycler
 import re
-from PIL import ImageEnhance, ImageOps,ImageFilter
+from PIL import Image,ImageEnhance, ImageOps,ImageFilter
 from rembg import remove,new_session
 from mpl_toolkits.mplot3d import Axes3D
 import docx
@@ -2108,7 +2108,6 @@ def load_img(fpath):
         FileNotFoundError: If the specified file is not found.
         OSError: If the specified file cannot be opened or is not a valid image file.
     """
-    from PIL import Image
 
     try:
         img = Image.open(fpath)
@@ -2759,6 +2758,46 @@ def figsets(*args):
         plt.tight_layout()
         plt.gcf().align_labels()
 
+def thumbnail(dir_img_list,figsize=(10,10),dpi=100, dir_save=None, kind='.png'):
+    """
+    Display a thumbnail figure of all images in the specified directory.
+    Args:
+        dir_img_list (list): List of the Directory containing the images.
+    """
+    num_images = len(dir_img_list)
+    if not kind.startswith('.'):
+        kind='.'+kind
+
+    if num_images == 0:
+        print("No images found to display.")
+        return
+    grid_size = int(num_images ** 0.5) + 1 # Determine grid size
+    fig, axs = plt.subplots(grid_size, grid_size, figsize=figsize,dpi=dpi)
+    for ax, image_file in zip(axs.flatten(), dir_img_list):
+        try:
+            img = Image.open(image_file)
+            ax.imshow(img)
+            ax.axis('off')
+        except:
+            continue
+    # for ax in axs.flatten():
+    #     ax.axis('off')
+    [ax.axis("off") for ax in axs.flatten()]
+    plt.tight_layout()
+    if dir_save is None:
+        plt.show()
+    else:
+        if basename(dir_save):
+            fname= basename(dir_save) +kind
+        else:
+            fname= "_thumbnail_"+basename(dirname(dir_save)[:-1])+'.png'
+        if dirname(dir_img_list[0]) == dirname(dir_save):
+            figsave(dirname(dir_save[:-1]),fname)
+        else:
+            figsave(dirname(dir_save),fname)
+# usage:
+# fpath = "/Users/macjianfeng/Dropbox/github/python/py2ls/tests/xample_netfinder/images/"
+# thumbnail(listdir(fpath,'png').fpath.to_list(),dir_save=dirname(fpath))
 def read_mplstyle(style_file):
     # Load the style file
     plt.style.use(style_file)

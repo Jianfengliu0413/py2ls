@@ -7,11 +7,10 @@ from . import (
     correlators, 
     dbhandler, 
     freqanalysis, 
-    internet_finder, 
     ips, 
     netfinder, 
     sleep_events_detectors, 
     translator, 
-    version, 
     wb_detector, 
     )
+from .ips import *

@@ -21,8 +21,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-import pprint
+from pprint import pp
 import mimetypes
+import io
+import matplotlib.pyplot as plt
+from PIL import Image
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -313,7 +316,7 @@ def pdf_detector(url, contains=None, dir_save=None,booster=False):
             pdf_links = filter_links(links=links_all, contains=["pdf"])
 
     if pdf_links:
-        pprint.pp(f"pdf detected\n{pdf_links}")
+        pp(f"pdf detected{pdf_links}")
     else:
         print('no pdf file')
     if dir_save:
@@ -399,9 +402,13 @@ def find_img(url, dir_save="images", verbose=True):
                 print(f"Failed to process image {image_url}: {e}")
         print(f"images were saved at\n{dir_save}")
         if verbose:
-            display_thumbnail_figure(flist(dir_save,filter='img'),dpi=200)
+            display_thumbnail_figure(flist(dir_save,filter='img'),dpi=100)
     return content
-
+def svg_to_png(svg_file):
+    with WandImage(filename=svg_file, resolution=300) as img:
+        img.format = 'png'
+        png_image = img.make_blob()
+    return Image.open(io.BytesIO(png_image))
 def display_thumbnail_figure(dir_img_list,figsize=(10,10),dpi=100):
     import matplotlib.pyplot as plt
     from PIL import Image
@@ -422,13 +429,14 @@ def display_thumbnail_figure(dir_img_list,figsize=(10,10),dpi=100):
     fig, axs = plt.subplots(grid_size, grid_size, figsize=figsize,dpi=dpi)
 
     for ax, image_file in zip(axs.flatten(), dir_img_list):
-        img = Image.open(image_file)
-        ax.imshow(img)
-        ax.axis('off')  # Hide axes
-
+        try:
+            img = Image.open(image_file)
+            ax.imshow(img)
+            ax.axis('off')  # Hide axes
+        except:
+            continue
     # Hide remaining subplots
-    for ax in axs.flatten()[num_images:]:
-        ax.axis('off')
+    [ax.axis("off") for ax in axs.flatten()]
 
     plt.tight_layout()
     plt.show()
