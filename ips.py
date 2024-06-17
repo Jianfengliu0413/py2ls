@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
-# from functools import partial
 import seaborn as sns
 import scienceplots
 import matplotlib
