@@ -4,7 +4,7 @@ import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
-import scienceplots
+# import scienceplots
 import matplotlib
 import sys
 import os
