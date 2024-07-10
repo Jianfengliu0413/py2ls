@@ -13,6 +13,7 @@ import numpy as np
 from nltk.tokenize import sent_tokenize
 from itertools import pairwise
 from tqdm import tqdm
+from fuzzywuzzy import fuzz,process
 
 
 def split_by_sent_n(text,n=10):
@@ -58,106 +59,173 @@ def get_lang_code_iso639():
     return lang_code_iso639
 
 # get_lang_code_iso639()
-lang_code_iso639={'Abkhazian': 'ab',
- 'Afar': 'aa',
- 'Afrikaans': 'af',
- 'Akan': 'ak',
- 'Albanian': 'sq',
- 'Amharic': 'am',
- 'Arabic': 'ar',
- 'Armenian': 'hy',
- 'Assamese': 'as',
-#  'Avaric': 'av',
- 'Aymara': 'ay',
- 'Azerbaijani': 'az',
- 'Bashkir': 'ba',
- 'Basque': 'eu',
- 'Belarusian': 'be',
- 'Bislama': 'bi',
- 'Breton': 'br',
- 'Burmese': 'my',
- 'Catalan, Valencian': 'ca',
- 'Chamorro': 'ch',
- 'Chichewa, Chewa, Nyanja': 'ny',
- 'Chinese': 'zh',
- 'Corsican': 'co',
- 'Cree': 'cr',
- 'Croatian': 'hr',
- 'Danish': 'da',
- 'Dutch, Flemish': 'nl',
- 'Dzongkha': 'dz',
- 'English': 'en',
- 'Finnish': 'fi',
- 'French': 'fr',
- 'Galician': 'gl',
- 'Georgian': 'ka',
- 'German': 'de',
- 'Greek, Modern (1453–)': 'el',
- 'Gujarati': 'gu',
- 'Hausa': 'ha',
- 'Hebrew': 'he',
- 'Hindi': 'hi',
- 'Hungarian': 'hu',
- 'Icelandic': 'is',
- 'Italian': 'it',
- 'Kikuyu, Gikuyu': 'ki',
- 'Korean': 'ko',
- 'Kurdish': 'ku',
- 'Latin': 'la',
- 'Limburgan, Limburger, Limburgish': 'li',
- 'Luba-Katanga': 'lu',
- 'Macedonian': 'mk',
- 'Malay': 'ms',
- 'Nauru': 'na',
- 'North Ndebele': 'nd',
- 'Nepali': 'ne',
- 'Norwegian': 'no',
- 'Norwegian Nynorsk': 'nn',
- 'Sichuan Yi, Nuosu': 'ii',
- 'Occitan': 'oc',
- 'Ojibwa': 'oj',
- 'Oriya': 'or',
- 'Ossetian, Ossetic': 'os',
- 'Persian': 'fa',
- 'Punjabi, Panjabi': 'pa',
- 'Quechua': 'qu',
- 'Romanian, Moldavian, Moldovan': 'ro',
- 'Russian': 'ru',
- 'Samoan': 'sm',
- 'Sanskrit': 'sa',
- 'Serbian': 'sr',
- 'Shona': 'sn',
- 'Sinhala, Sinhalese': 'si',
- 'Slovenian': 'sl',
- 'Somali': 'so',
- 'Sundanese': 'su',
- 'Swahili': 'sw',
- 'Swati': 'ss',
- 'Tajik': 'tg',
- 'Tamil': 'ta',
- 'Telugu': 'te',
- 'Thai': 'th',
- 'Tibetan': 'bo',
- 'Tigrinya': 'ti',
- 'Tonga (Tonga Islands)': 'to',
- 'Tsonga': 'ts',
- 'Twi': 'tw',
- 'Ukrainian': 'uk',
- 'Urdu': 'ur',
- 'Uzbek': 'uz',
- 'Venda': 've',
- 'Vietnamese': 'vi',
- 'Volapük': 'vo',
- 'Welsh': 'cy',
- 'Wolof': 'wo',
- 'Xhosa': 'xh',
- 'Yiddish': 'yi',
- 'Yoruba': 'yo',
- 'Zulu': 'zu'}
-def search_iso639_fullname(val):
-    for k,v in lang_code_iso639.items():
-        if 'de' in v:
-            return k
+
+def detect_lang(text, output='lang',verbose=False):
+    lang_code_iso639={'Abkhazian': 'ab',
+                     'Afar': 'aa',
+                     'Afrikaans': 'af',
+                     'Akan': 'ak',
+                     'Albanian': 'sq',
+                     'Amharic': 'am',
+                     'Arabic': 'ar',
+                     'Armenian': 'hy',
+                     'Assamese': 'as',
+                     #  'Avaric': 'av',
+                     'Aymara': 'ay',
+                     'Azerbaijani': 'az',
+                     'Bashkir': 'ba',
+                     'Basque': 'eu',
+                     'Belarusian': 'be',
+                     'Bislama': 'bi',
+                     'Breton': 'br',
+                     'Burmese': 'my',
+                     'Catalan, Valencian': 'ca',
+                     'Chamorro': 'ch',
+                     'Chichewa, Chewa, Nyanja': 'ny',
+                     'Chinese': 'zh',
+                     'Corsican': 'co',
+                     'Cree': 'cr',
+                     'Croatian': 'hr',
+                     'Danish': 'da',
+                     'Dutch, Flemish': 'nl',
+                     'Dzongkha': 'dz',
+                     'English': 'en',
+                     'Finnish': 'fi',
+                     'French': 'fr',
+                     'Galician': 'gl',
+                     'Georgian': 'ka',
+                     'German': 'de',
+                     'Greek, Modern (1453–)': 'el',
+                     'Gujarati': 'gu',
+                     'Hausa': 'ha',
+                     'Hebrew': 'he',
+                     'Hindi': 'hi',
+                     'Hungarian': 'hu',
+                     'Icelandic': 'is',
+                     'Italian': 'it',
+                     'Kikuyu, Gikuyu': 'ki',
+                     'Korean': 'ko',
+                     'Kurdish': 'ku',
+                     'Latin': 'la',
+                     'Limburgan, Limburger, Limburgish': 'li',
+                     'Luba-Katanga': 'lu',
+                     'Macedonian': 'mk',
+                     'Malay': 'ms',
+                     'Nauru': 'na',
+                     'North Ndebele': 'nd',
+                     'Nepali': 'ne',
+                     'Norwegian': 'no',
+                     'Norwegian Nynorsk': 'nn',
+                     'Sichuan Yi, Nuosu': 'ii',
+                     'Occitan': 'oc',
+                     'Ojibwa': 'oj',
+                     'Oriya': 'or',
+                     'Ossetian, Ossetic': 'os',
+                     'Persian': 'fa',
+                     'Punjabi, Panjabi': 'pa',
+                     'Quechua': 'qu',
+                     'Romanian, Moldavian, Moldovan': 'ro',
+                     'Russian': 'ru',
+                     'Samoan': 'sm',
+                     'Sanskrit': 'sa',
+                     'Serbian': 'sr',
+                     'Shona': 'sn',
+                     'Sinhala, Sinhalese': 'si',
+                     'Slovenian': 'sl',
+                     'Somali': 'so',
+                     'Sundanese': 'su',
+                     'Swahili': 'sw',
+                     'Swati': 'ss',
+                     'Tajik': 'tg',
+                     'Tamil': 'ta',
+                     'Telugu': 'te',
+                     'Thai': 'th',
+                     'Tibetan': 'bo',
+                     'Tigrinya': 'ti',
+                     'Tonga (Tonga Islands)': 'to',
+                     'Tsonga': 'ts',
+                     'Twi': 'tw',
+                     'Ukrainian': 'uk',
+                     'Urdu': 'ur',
+                     'Uzbek': 'uz',
+                     'Venda': 've',
+                     'Vietnamese': 'vi',
+                     'Volapük': 'vo',
+                     'Welsh': 'cy',
+                     'Wolof': 'wo',
+                     'Xhosa': 'xh',
+                     'Yiddish': 'yi',
+                     'Yoruba': 'yo',
+                     'Zulu': 'zu'}
+    l_lang,l_code = [],[]
+    [[l_lang.append(v),l_code.append(k)] for v,k in lang_code_iso639.items()]
+    try:
+        if is_text(text):
+            code_detect=detect(text)
+            if 'c' in output.lower(): # return code
+                return l_code[strcmp(code_detect,l_code, verbose=verbose)[1]]
+            else:
+                return l_lang[strcmp(code_detect,l_code, verbose=verbose)[1]]
+        else:
+            print(f"{text} is not supported")
+            return 'no'
+    except:
+        return 'no'
+
+def is_text(s):
+    has_alpha = any(char.isalpha() for char in s)
+    has_non_alpha = any(not char.isalpha() for char in s)
+    # no_special = not re.search(r'[^A-Za-z0-9\s]', s)
+    return has_alpha and has_non_alpha
+
+def strcmp(search_term, candidates, ignore_case=True, verbose=True, scorer='WR'):
+    """
+    Compares a search term with a list of candidate strings and finds the best match based on similarity score.
+
+    Parameters:
+    search_term (str): The term to be searched for.
+    candidates (list of str): A list of candidate strings to compare against the search term.
+    ignore_case (bool): If True, the comparison ignores case differences.
+    verbose (bool): If True, prints the similarity score and the best match.
+
+    Returns:
+    tuple: A tuple containing the best match and its index in the candidates list.
+    """
+    def to_lower(s, ignore_case=True):
+        #Converts a string or list of strings to lowercase if ignore_case is True.
+        if ignore_case:
+            if isinstance(s, str):
+                return s.lower()
+            elif isinstance(s, list):
+                return [elem.lower() for elem in s]
+        return s
+    str1_,str2_ = to_lower(search_term, ignore_case),to_lower(candidates, ignore_case)
+    if isinstance(str2_, list):
+        if 'part' in scorer.lower():
+            similarity_scores = [fuzz.partial_ratio(str1_, word) for word in str2_]
+        elif 'W' in scorer.lower():
+            similarity_scores = [fuzz.WRatio(str1_, word) for word in str2_]
+        elif 'Ratio' in scorer.lower():
+            similarity_scores = [fuzz.Ratio(str1_, word) for word in str2_]
+        else:
+            similarity_scores = [fuzz.WRatio(str1_, word) for word in str2_]
+        best_match_index = similarity_scores.index(max(similarity_scores))
+        best_match_score = similarity_scores[best_match_index]
+    else:
+        best_match_index = 0
+        if 'part' in scorer.lower():
+            best_match_score = fuzz.partial_ratio(str1_, str2_)
+        elif 'W' in scorer.lower():
+            best_match_score = fuzz.WRatio(str1_, str2_)
+        elif 'Ratio' in scorer.lower():
+            best_match_score = fuzz.Ratio(str1_, str2_)
+        else:
+            best_match_score = fuzz.WRatio(str1_, str2_)
+    if verbose:
+        print(f"\nbest_match is: {candidates[best_match_index],best_match_score}")
+        best_match = process.extract(search_term, candidates)
+        print(f"建议: {best_match}")
+    return candidates[best_match_index], best_match_index
 
 
 def methods(idx=0):
@@ -231,23 +299,6 @@ def get_language_code(language, translator="google"):
 # print(f"Google Translate Language Code for '{language}': {google_lang_code}")
 # print(f"DeepL Translator Language Code for '{language}': {deepl_lang_code}")
 
-def detect_language(text):
-    """
-    Detect the language of the given text.
-    """
-    if len(text.strip()) < 3:
-        print("Error: Input text is too short for language detection.")
-        return "english"
-    else:
-        lang_code = detect(text)
-        detected_language=search_iso639_fullname(lang_code)
-        print(detected_language)
-        return detected_language
-
-
-# text_to_detect = "Bonjour, comment ça va?"
-# detected_language = detect_language(text_to_detect)
-# print("Detected language:", detected_language)
 
 def load_docx(filename):
     """
@@ -438,13 +489,13 @@ def translate(
         text=merge_text(text)
     text = replace_text(text)
     if lang_src is None:
-        lang_src =  detect_language(text)
+        lang_src =  detect_lang(text)
     try:
         if len(text) > limit:
             n=auto_chunk_size(text)
             text_segments = split_by_sent_n(text,n)
             translations = ""
-            for segment in tqdm(text_segments,desc='is translating'):
+            for segment in tqdm(text_segments,desc='is translating', colour="green"):
                 segment = replace_text(merge_text(segment))
                 translated_segment = translate_segment(text=segment, lang=lang, lang_src=lang_src, method=method, user_agent=user_agent,service_urls=service_urls, verbose=verbose,error_verbose=error_verbose
                 )
@@ -479,7 +530,7 @@ def translate_segment(
     text_clean = filter_errors(text)
     text_clean = replace_text(text_clean)
     if lang_src is None:
-        lang_src = detect_language(text_clean)
+        lang_src = detect_lang(text_clean)
     try:
         lang_src = get_language_code(lang_src, 'google')
         lang_tgt = get_language_code(lang, 'google')
@@ -547,7 +598,7 @@ def translate_with_retry(
             raise RuntimeError(f"Error using {service_url}: {e}")
 
     if lang_src is None:
-        lang_src = detect_language(text) 
+        lang_src = detect_lang(text) 
         lang_src = get_language_code(language=lang_src)
     lang = get_language_code(language=lang)
     print(f"lang:{lang},lang_src:{lang_src}")

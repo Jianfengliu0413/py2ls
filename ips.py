@@ -37,17 +37,414 @@ from numerizer import numerize
 from tqdm import tqdm
 import mimetypes
 from pprint import pp
+from dateutil import parser
+from datetime import datetime
+from collections import Counter
+from fuzzywuzzy import fuzz,process
+from py2ls import netfinder
+from langdetect import detect
+import shutil
+from duckduckgo_search import DDGS
+
+
+dir_save='/Users/macjianfeng/Dropbox/Downloads/'
+
+def rm_folder(folder_path, verbose=True):
+    try:
+        shutil.rmtree(folder_path)
+        if verbose:
+            print(f'Successfully deleted {folder_path}')
+    except Exception as e:
+        if verbose:
+            print(f'Failed to delete {folder_path}. Reason: {e}')
+
+
+def search(query, limit=5, kind='text', output='df',verbose=False,download=True, dir_save=dir_save):
+    from duckduckgo_search import DDGS
+    if 'te' in kind.lower():
+        results = DDGS().text(query, max_results=limit)
+        res=pd.DataFrame(results)
+        res.rename(columns={"href":"links"},inplace=True)
+    if verbose:
+        print(f'searching "{query}": got the results below\n{res}')
+    if download:
+        try:
+            netfinder.downloader(url=res.links.tolist(), dir_save=dir_save, verbose=verbose)
+        except:
+            if verbose:
+                print(f"failed link")
+    return res
+
+def echo(*args,**kwargs):
+    """
+    query, model="gpt", verbose=True, log=True, dir_save=dir_save
+    a ai chat tool
+    Args:
+        query (str): _description_
+        model (str, optional): _description_. Defaults to "gpt".
+        verbose (bool, optional): _description_. Defaults to True.
+        log (bool, optional): _description_. Defaults to True.
+        dir_save (str, path, optional): _description_. Defaults to dir_save.
+
+    Returns:
+        str: the answer from ai
+    """
+    global dir_save
+    
+    query=None
+    model=kwargs.get('model', 'gpt')
+    verbose=kwargs.get('verbose', True)
+    log=kwargs.get('log', True)
+    dir_save=kwargs.get('dir_save', dir_save)
+    for arg in args:
+        if isinstance(arg, str):
+            if os.path.isdir(arg):
+                dir_save = arg
+            # elif os.path.isfile(arg):
+            #     dir_save = dirname(arg)
+            elif len(arg) <= 5:
+                model = arg
+            else:
+                query = arg
+        elif isinstance(arg, dict):
+            verbose = arg.get("verbose", verbose)
+            log = arg.get("log", log)
+    def is_in_any(str_candi_short, str_full, ignore_case=True):
+        if isinstance(str_candi_short, str):
+            str_candi_short=[str_candi_short]
+        res_bool=[]
+        if ignore_case:
+            [res_bool.append(i in str_full.lower())  for i in str_candi_short ]
+        else:
+            [res_bool.append(i in str_full)  for i in str_candi_short ]
+        return any(res_bool)
+    def valid_mod_name(str_fly):
+        if is_in_any(str_fly, "claude-3-haiku"):
+            return "claude-3-haiku"
+        elif is_in_any(str_fly, "gpt-3.5"):
+            return "gpt-3.5"
+        elif is_in_any(str_fly, "llama-3-70b"):
+            return "llama-3-70b"
+        elif is_in_any(str_fly, "mixtral-8x7b"):
+            return "mixtral-8x7b"
+        else:
+            print(f"not support your model{model}, supported models: 'claude','gpt(default)', 'llama','mixtral'")
+            return "gpt-3.5" # default model
+    model_valid = valid_mod_name(model)
+    res=DDGS().chat(query, model=model_valid)
+    if verbose:
+        pp(res)
+    if log:
+        dt_str=datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H:%M:%S')
+        res_ = f"\n\n####Q:{query}\n\n#####Ans:{dt_str}\n\n>{res}\n"
+        if bool(os.path.basename(dir_save)):
+            fpath = dir_save
+        else:
+            os.makedirs(dir_save, exist_ok=True)
+            fpath = os.path.join(dir_save, f"log_ai.md")
+        fupdate(fpath=fpath,content=res_)
+        print(f"log file:{fpath}")
+    return res
+
+def chat(*args, **kwargs):
+    if len(args) == 1 and isinstance(args[0], str):
+        kwargs['query'] = args[0]
+    return echo(**kwargs)
+
+def ai(*args, **kwargs):
+    if len(args) == 1 and isinstance(args[0], str):
+        kwargs['query'] = args[0]
+    return echo(**kwargs)
+
+def detect_lang(text, output='lang',verbose=True):
+    lang_code_iso639={'Abkhazian': 'ab',
+                     'Afar': 'aa',
+                     'Afrikaans': 'af',
+                     'Akan': 'ak',
+                     'Albanian': 'sq',
+                     'Amharic': 'am',
+                     'Arabic': 'ar',
+                     'Armenian': 'hy',
+                     'Assamese': 'as',
+                     #  'Avaric': 'av',
+                     'Aymara': 'ay',
+                     'Azerbaijani': 'az',
+                     'Bashkir': 'ba',
+                     'Basque': 'eu',
+                     'Belarusian': 'be',
+                     'Bislama': 'bi',
+                     'Breton': 'br',
+                     'Burmese': 'my',
+                     'Catalan, Valencian': 'ca',
+                     'Chamorro': 'ch',
+                     'Chichewa, Chewa, Nyanja': 'ny',
+                     'Chinese': 'zh',
+                     'Corsican': 'co',
+                     'Cree': 'cr',
+                     'Croatian': 'hr',
+                     'Danish': 'da',
+                     'Dutch, Flemish': 'nl',
+                     'Dzongkha': 'dz',
+                     'English': 'en',
+                     'Finnish': 'fi',
+                     'French': 'fr',
+                     'Galician': 'gl',
+                     'Georgian': 'ka',
+                     'German': 'de',
+                     'Greek, Modern (1453–)': 'el',
+                     'Gujarati': 'gu',
+                     'Hausa': 'ha',
+                     'Hebrew': 'he',
+                     'Hindi': 'hi',
+                     'Hungarian': 'hu',
+                     'Icelandic': 'is',
+                     'Italian': 'it',
+                     'Kikuyu, Gikuyu': 'ki',
+                     'Korean': 'ko',
+                     'Kurdish': 'ku',
+                     'Latin': 'la',
+                     'Limburgan, Limburger, Limburgish': 'li',
+                     'Luba-Katanga': 'lu',
+                     'Macedonian': 'mk',
+                     'Malay': 'ms',
+                     'Nauru': 'na',
+                     'North Ndebele': 'nd',
+                     'Nepali': 'ne',
+                     'Norwegian': 'no',
+                     'Norwegian Nynorsk': 'nn',
+                     'Sichuan Yi, Nuosu': 'ii',
+                     'Occitan': 'oc',
+                     'Ojibwa': 'oj',
+                     'Oriya': 'or',
+                     'Ossetian, Ossetic': 'os',
+                     'Persian': 'fa',
+                     'Punjabi, Panjabi': 'pa',
+                     'Quechua': 'qu',
+                     'Romanian, Moldavian, Moldovan': 'ro',
+                     'Russian': 'ru',
+                     'Samoan': 'sm',
+                     'Sanskrit': 'sa',
+                     'Serbian': 'sr',
+                     'Shona': 'sn',
+                     'Sinhala, Sinhalese': 'si',
+                     'Slovenian': 'sl',
+                     'Somali': 'so',
+                     'Sundanese': 'su',
+                     'Swahili': 'sw',
+                     'Swati': 'ss',
+                     'Tajik': 'tg',
+                     'Tamil': 'ta',
+                     'Telugu': 'te',
+                     'Thai': 'th',
+                     'Tibetan': 'bo',
+                     'Tigrinya': 'ti',
+                     'Tonga (Tonga Islands)': 'to',
+                     'Tsonga': 'ts',
+                     'Twi': 'tw',
+                     'Ukrainian': 'uk',
+                     'Urdu': 'ur',
+                     'Uzbek': 'uz',
+                     'Venda': 've',
+                     'Vietnamese': 'vi',
+                     'Volapük': 'vo',
+                     'Welsh': 'cy',
+                     'Wolof': 'wo',
+                     'Xhosa': 'xh',
+                     'Yiddish': 'yi',
+                     'Yoruba': 'yo',
+                     'Zulu': 'zu'}
+    l_lang,l_code = [],[]
+    [[l_lang.append(v),l_code.append(k)] for v,k in lang_code_iso639.items()]
+    try:
+        if is_text(text):
+            code_detect=detect(text)
+            if 'c' in output.lower(): # return code
+                return l_code[strcmp(code_detect,l_code, verbose=verbose)[1]]
+            else:
+                return l_lang[strcmp(code_detect,l_code, verbose=verbose)[1]]
+        else:
+            print(f"{text} is not supported")
+            return 'no'
+    except:
+        return 'no'
+
+def is_text(s):
+    has_alpha = any(char.isalpha() for char in s)
+    has_non_alpha = any(not char.isalpha() for char in s)
+    # no_special = not re.search(r'[^A-Za-z0-9\s]', s)
+    return has_alpha and has_non_alpha
+
+def strcmp(search_term, candidates, ignore_case=True, verbose=True, scorer='WR'):
+    """
+    Compares a search term with a list of candidate strings and finds the best match based on similarity score.
+
+    Parameters:
+    search_term (str): The term to be searched for.
+    candidates (list of str): A list of candidate strings to compare against the search term.
+    ignore_case (bool): If True, the comparison ignores case differences.
+    verbose (bool): If True, prints the similarity score and the best match.
+
+    Returns:
+    tuple: A tuple containing the best match and its index in the candidates list.
+    """
+    def to_lower(s, ignore_case=True):
+        #Converts a string or list of strings to lowercase if ignore_case is True.
+        if ignore_case:
+            if isinstance(s, str):
+                return s.lower()
+            elif isinstance(s, list):
+                return [elem.lower() for elem in s]
+        return s
+    str1_,str2_ = to_lower(search_term, ignore_case),to_lower(candidates, ignore_case)
+    if isinstance(str2_, list):
+        if 'part' in scorer.lower():
+            similarity_scores = [fuzz.partial_ratio(str1_, word) for word in str2_]
+        elif 'W' in scorer.lower():
+            similarity_scores = [fuzz.WRatio(str1_, word) for word in str2_]
+        elif 'Ratio' in scorer.lower():
+            similarity_scores = [fuzz.Ratio(str1_, word) for word in str2_]
+        else:
+            similarity_scores = [fuzz.WRatio(str1_, word) for word in str2_]
+        best_match_index = similarity_scores.index(max(similarity_scores))
+        best_match_score = similarity_scores[best_match_index]
+    else:
+        best_match_index = 0
+        if 'part' in scorer.lower():
+            best_match_score = fuzz.partial_ratio(str1_, str2_)
+        elif 'W' in scorer.lower():
+            best_match_score = fuzz.WRatio(str1_, str2_)
+        elif 'Ratio' in scorer.lower():
+            best_match_score = fuzz.Ratio(str1_, str2_)
+        else:
+            best_match_score = fuzz.WRatio(str1_, str2_)
+    if verbose:
+        print(f"\nbest_match is: {candidates[best_match_index],best_match_score}")
+        best_match = process.extract(search_term, candidates)
+        print(f"建议: {best_match}")
+    return candidates[best_match_index], best_match_index
+
+# Example usaged
+# str1 = "plos biology"
+# str2 = ['PLoS Computational Biology', 'PLOS BIOLOGY']
+# best_match, idx = strcmp(str1, str2, ignore_case=1)
+
+def counter(list_, verbose=True):
+    c = Counter(list_)
+    # Print the name counts
+    for item, count in c.items():
+        if verbose:
+            print(f"{item}: {count}")
+    return c
+# usage:
+# print(f"Return an iterator over elements repeating each as many times as its count:\n{sorted(c.elements())}")
+# print(f"Return a list of the n most common elements:\n{c.most_common()}")
+# print(f"Compute the sum of the counts:\n{c.total()}")
+
+def is_num(s):
+    """
+    Check if a string can be converted to a number (int or float).
+    Parameters:
+    - s (str): The string to check.
+    Returns:
+    - bool: True if the string can be converted to a number, False otherwise.
+    """
+    try:
+        float(s)  # Try converting the string to a float
+        return True
+    except ValueError:
+        return False
+def isnum(s):
+    return is_num(s)
+
+def str2time(time_str, fmt='24'):
+    """
+    Convert a time string into the specified format.
+    Parameters:
+    - time_str (str): The time string to be converted.
+    - fmt (str): The format to convert the time to. Defaults to '%H:%M:%S'.
+    Returns:
+        %I represents the hour in 12-hour format.
+        %H represents the hour in 24-hour format (00 through 23).
+        %M represents the minute.
+        %S represents the second.
+        %p represents AM or PM.
+    - str: The converted time string.
+    """
+    def time_len_corr(time_str):
+        time_str_= ssplit(time_str,by=[':'," ","digital_num"]) if ':' in time_str else None
+        time_str_split=[]
+        [time_str_split.append(i) for i in time_str_ if is_num(i)] 
+        if time_str_split:
+            if len(time_str_split)==2:
+                H,M=time_str_split
+                time_str_full=H+":"+M+":00"
+            elif len(time_str_split)==3:
+                H,M,S=time_str_split
+                time_str_full=H+":"+M+":"+S
+        else:
+            time_str_full=time_str_
+        if 'am' in time_str.lower():
+            time_str_full+=" AM" 
+        elif "pm"in time_str.lower():
+            time_str_full +=" PM"  
+        return time_str_full
+    if '12' in fmt:
+        fmt = "%I:%M:%S %p"
+    elif '24' in fmt:
+        fmt = "%H:%M:%S"
+
+    try:
+        # Try to parse the time string assuming it could be in 24-hour or 12-hour format
+        time_obj = datetime.strptime(time_len_corr(time_str), '%H:%M:%S')
+    except ValueError:
+        try:
+            time_obj = datetime.strptime(time_len_corr(time_str), '%I:%M:%S %p')
+        except ValueError as e:
+            raise ValueError(f"Unable to parse time string: {time_str}. Error: {e}")
+    
+    # Format the time object to the desired output format
+    formatted_time = time_obj.strftime(fmt)
+    return formatted_time
+
+# # Example usage:
+# time_str1 = "14:30:45"
+# time_str2 = "02:30:45 PM"
+
+# formatted_time1 = str2time(time_str1, fmt='12')  # Convert to 12-hour format
+# formatted_time2 = str2time(time_str2, fmt='24')    # Convert to 24-hour format
+
+# print(formatted_time1)  # Output: 02:30:45 PM
+# print(formatted_time2)  # Output: 14:30:45
+
+def str2date(date_str, fmt='%Y-%m-%d_%H:%M:%S'):
+    """
+    Convert a date string into the specified format.
+    Parameters:
+    - date_str (str): The date string to be converted.
+    - fmt (str): The format to convert the date to. Defaults to '%Y%m%d'.
+    Returns:
+    - str: The converted date string.
+    """
+    try:
+        date_obj = parser.parse(date_str)
+    except ValueError as e:
+        raise ValueError(f"Unable to parse date string: {date_str}. Error: {e}")
+    # Format the date object to the desired output format
+    formatted_date = date_obj.strftime(fmt)
+    return formatted_date
+# str1=str2date(num2str(20240625),fmt="%a %d-%B-%Y")
+# print(str1)
+# str2=str2num(str2date(str1,fmt='%a %Y%m%d'))
+# print(str2)
 
 def str2num(s, *args):
     delimiter = None
     round_digits = None
-
     for arg in args:
         if isinstance(arg, str):
             delimiter = arg
         elif isinstance(arg, int):
             round_digits = arg
-
     try:
         num = int(s)
     except ValueError:
@@ -132,18 +529,33 @@ def num2str(num, *args):
 # print(num2str(7000.125, 2),type(num2str(7000.125, 2)))        # Output: "7000.13"
 # print(num2str(12345.6789, ","),type(num2str(12345.6789, ",")))    # Output: "12,345.6789"
 # print(num2str(7000.00, ","),type(num2str(7000.00, ",")))       # Output: "7,000.00"
-def sreplace(text, dict_replace=None, robust=True):
+def sreplace(*args,**kwargs):
     """
+    sreplace(text, by=None, robust=True)
     Replace specified substrings in the input text with provided replacements.
     Args:
         text (str): The input text where replacements will be made.
-        dict_replace (dict, optional): A dictionary containing substrings to be replaced as keys
+        by (dict, optional): A dictionary containing substrings to be replaced as keys
             and their corresponding replacements as values. Defaults to {".com": "..come", "\n": " ", "\t": " ", "  ": " "}.
         robust (bool, optional): If True, additional default replacements for newline and tab characters will be applied.
                                 Default is False.
     Returns:
         str: The text after replacements have been made.
     """
+    text = None
+    by = kwargs.get('by', None)
+    robust = kwargs.get('robust', True)
+    
+    for arg in args:
+        if isinstance(arg,str):
+            text=arg
+        elif isinstance(arg,dict):
+            by=arg
+        elif isinstance(arg,bool):
+            robust=arg
+        else:
+            Error(f"{type(arg)} is not supported")
+    
     # Default replacements for newline and tab characters
     default_replacements = {
         "\a": "",
@@ -164,19 +576,18 @@ def sreplace(text, dict_replace=None, robust=True):
     }
 
     # If dict_replace is None, use the default dictionary
-    if dict_replace is None:
-        dict_replace = {}
-
+    if by is None:
+        by = {}
     # If robust is True, update the dictionary with default replacements
     if robust:
-        dict_replace.update(default_replacements)
+        by.update(default_replacements)
 
     # Iterate over each key-value pair in the dictionary and replace substrings accordingly
-    for k, v in dict_replace.items():
+    for k, v in by.items():
         text = text.replace(k, v)
     return text
 # usage:
-# sreplace(text, dict_replace=dict(old_str='new_str'), robust=True)
+# sreplace(text, by=dict(old_str='new_str'), robust=True)
 
 def paper_size(paper_type_str='a4'):
     df=pd.DataFrame({'a0':[841,1189],'a1':[594,841],'a2':[420,594],'a3':[297,420],'a4':[210,297],'a5':[148,210],'a6':[105,148],'a7':[74,105],
@@ -318,10 +729,10 @@ def ssplit(text, by="space", verbose=False, **kws):
         if verbose:
             print(f"split_by_word_length(text, length)")
         return split_by_word_length(text, **kws)  # split_by_word_length(text, length)
-    elif "," in by:
-        if verbose:
-            print(f"splited by ','")
-        return text.split(",")
+    # elif "," in by:
+    #     if verbose:
+    #         print(f"splited by ','")
+    #     return text.split(",")
     elif isinstance(by, list):
         if verbose:
             print(f"split_by_multiple_delimiters: ['|','&']")
@@ -579,6 +990,31 @@ def fload(fpath, kind=None, **kwargs):
 # xlsx_content = fload('sample.xlsx')
 # docx_content = fload('sample.docx')
 
+def fupdate(fpath, content=None):
+    """
+    Update a file by adding new content at the top and moving the old content to the bottom.
+    Parameters
+    ----------
+    fpath : str
+        The file path where the content should be updated.
+    content : str, optional
+        The new content to add at the top of the file. If not provided, the function will not add any new content.
+    Notes
+    -----
+    - If the file at `fpath` does not exist, it will be created.
+    - The new content will be added at the top, followed by the old content of the file.
+    """
+    content = content or ""
+    if os.path.exists(fpath):
+        with open(fpath, 'r') as file:
+            old_content = file.read()
+    else:
+        old_content = '' 
+        
+    with open(fpath, 'w') as file:
+        file.write(content)
+        file.write(old_content)
+        
 def fsave(
     fpath,
     content,
@@ -586,6 +1022,7 @@ def fsave(
     font_name="Times",
     font_size=10,
     spacing=6,
+    mode='w',
     **kwargs,
 ):
     """
@@ -601,8 +1038,8 @@ def fsave(
     Returns:
         None
     """
-    def save_content(fpath, content): 
-        with open(fpath, "w", encoding='utf-8') as file:
+    def save_content(fpath, content, mode=mode): 
+        with open(fpath, mode, encoding='utf-8') as file:
             file.write(content)
 
 
@@ -621,19 +1058,19 @@ def fsave(
         doc.save(fpath)
 
 
-    def save_txt_md(fpath, content, sep="\n"):
+    def save_txt_md(fpath, content, sep="\n",mode='w'):
             # Ensure content is a single string
         if isinstance(content, list):
             content = sep.join(content)
-        save_content(fpath, sep.join(content))
+        save_content(fpath, sep.join(content),mode)
 
 
-    def save_html(fpath, content, font_name, font_size):
+    def save_html(fpath, content, font_name, font_size,mode='w'):
         html_content = "<html><body>"
         for paragraph_text in content:
             html_content += f'<p style="font-family:{font_name}; font-size:{font_size}px;">{paragraph_text}</p>'
         html_content += "</body></html>"
-        save_content(fpath, html_content)
+        save_content(fpath, html_content,mode)
 
 
     def save_pdf(fpath, content, font_name, font_size):
@@ -716,16 +1153,16 @@ def fsave(
         "xml",
         "yaml",
     ]:
-        raise ValueError(
-            f"Error:\n{kind} is not in the supported list ['docx', 'txt', 'md', 'html', 'pdf', 'csv', 'xlsx', 'json', 'xml', 'yaml']"
+        print(
+            f"Warning:\n{kind} is not in the supported list ['docx', 'txt', 'md', 'html', 'pdf', 'csv', 'xlsx', 'json', 'xml', 'yaml']"
         )
 
     if kind == "docx" or kind=="doc":
         save_docx(fpath, content, font_name, font_size, spacing)
     elif kind == "txt":
-        save_txt_md(fpath, content, sep="")
+        save_txt_md(fpath, content, sep="",mode=mode)
     elif kind == "md":
-        save_txt_md(fpath, content, sep="")
+        save_txt_md(fpath, content, sep="",mode=mode)
     elif kind == "html":
         save_html(fpath, content, font_name, font_size)
     elif kind == "pdf":
@@ -745,9 +1182,12 @@ def fsave(
     elif kind == "yaml":
         save_yaml(fpath, content, **kwargs)  # Assuming content is a serializable object
     else:
-        raise ValueError(
-            f"Error:\n{kind} is not in the supported list ['docx', 'txt', 'md', 'html', 'pdf', 'csv', 'xlsx', 'json', 'xml', 'yaml']"
-        )
+        try: 
+            netfinder.downloader(url=content, dir_save=dirname(fpath), kind=kind)
+        except:
+            print(
+                f"Error:\n{kind} is not in the supported list ['docx', 'txt', 'md', 'html', 'pdf', 'csv', 'xlsx', 'json', 'xml', 'yaml']"
+                )
 
 
 # # Example usage
@@ -771,15 +1211,116 @@ def fsave(
 def addpath(fpath):
     sys.path.insert(0,dir)
 def dirname(fpath):
+    """
+    dirname: Extracting Directory Name from a File Path
+    Args:
+        fpath (str): the file or directory path 
+    Returns:
+        str: directory, without filename
+    """
     dirname_=os.path.dirname(fpath)
     if not dirname_.endswith('/'):
         dirname_=dirname_+"/"
     return dirname_
-def dir_name(fpath):
+
+def dir_name(fpath): # same as "dirname"
     return dirname(fpath)
 def basename(fpath):
+    """
+    basename: # Output: file.txt
+    Args:
+        fpath (str): the file or directory path 
+    Returns:
+        str: # Output: file.txt
+    """
     return os.path.basename(fpath)
+def flist(fpath, contains="all"):
+    all_files = [os.path.join(fpath, f) for f in os.listdir(fpath) if os.path.isfile(os.path.join(fpath, f))]
+    if isinstance(contains, list):
+        filt_files = []
+        for filter_ in contains:
+            filt_files.extend(flist(fpath, filter_))
+        return filt_files
+    else:
+        if 'all' in contains.lower():
+            return all_files
+        else:
+            filt_files = [f for f in all_files if isa(f, contains)]
+            return filt_files
+def sort_kind(df, by="name", ascending=True):
+    if df[by].dtype == 'object':  # Check if the column contains string values
+        if ascending:
+            sorted_index = df[by].str.lower().argsort()
+        else:
+            sorted_index = df[by].str.lower().argsort()[::-1]
+    else:
+        if ascending:
+            sorted_index = df[by].argsort()
+        else:
+            sorted_index = df[by].argsort()[::-1]
+    sorted_df = df.iloc[sorted_index].reset_index(drop=True)
+    return sorted_df
 
+def isa(*args,**kwargs):
+    """
+    fpath, contains='img'
+    containss file paths based on the specified contains.
+    Args:
+        fpath (str): Path to the file.
+        contains (str): contains of file to contains. Default is 'img' for images. Other options include 'doc' for documents,
+                    'zip' for ZIP archives, and 'other' for other types of files.
+    Returns:
+        bool: True if the file matches the contains, False otherwise.
+    """
+    for arg in args:
+        if isinstance(arg, str):
+            if '/' in arg or '\\' in arg:
+                fpath = arg
+            else:
+                contains=arg
+    if 'img' in contains.lower() or 'image' in contains.lower():
+        return is_image(fpath)
+    elif 'doc' in contains.lower():
+        return is_document(fpath)
+    elif 'zip' in contains.lower():
+        return is_zip(fpath)
+    elif 'dir' in contains.lower() or ('f' in contains.lower() and 'd' in contains.lower()):
+        return bool(('/' in fpath) or ('\\' in fpath))
+    elif 'fi' in contains.lower():#file
+        return os.path.isfile(fpath)
+    else:
+        print(f"{contains} was not set up correctly")
+        return False
+
+def is_image(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type and mime_type.startswith('image'):
+        return True
+    else:
+        return False
+
+def is_document(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type and (
+        mime_type.startswith('text/') or
+        mime_type == 'application/pdf' or
+        mime_type == 'application/msword' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
+        mime_type == 'application/vnd.ms-excel' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
+        mime_type == 'application/vnd.ms-powerpoint' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ):
+        return True
+    else:
+        return False
+
+def is_zip(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type == 'application/zip':
+        return True
+    else:
+        return False
 def listdir(
     rootdir,
     kind="folder",
@@ -789,83 +1330,6 @@ def listdir(
     orient="list",
     output="df"
 ):
-    def sort_kind(df, by="name", ascending=True):
-        if df[by].dtype == 'object':  # Check if the column contains string values
-            if ascending:
-                sorted_index = df[by].str.lower().argsort()
-            else:
-                sorted_index = df[by].str.lower().argsort()[::-1]
-        else:
-            if ascending:
-                sorted_index = df[by].argsort()
-            else:
-                sorted_index = df[by].argsort()[::-1]
-        sorted_df = df.iloc[sorted_index].reset_index(drop=True)
-        return sorted_df
-
-    def flist(fpath, filter="all"):
-        all_files = [os.path.join(fpath, f) for f in os.listdir(fpath) if os.path.isfile(os.path.join(fpath, f))]
-        if isinstance(filter, list):
-            filt_files = []
-            for filter_ in filter:
-                filt_files.extend(flist(fpath, filter_))
-            return filt_files
-        else:
-            if 'all' in filter.lower():
-                return all_files
-            else:
-                filt_files = [f for f in all_files if istype(f, filter)]
-                return filt_files
-
-    def istype(fpath, filter='img'):
-        """
-        Filters file paths based on the specified filter.
-        Args:
-            fpath (str): Path to the file.
-            filter (str): Filter of file to filter. Default is 'img' for images. Other options include 'doc' for documents,
-                        'zip' for ZIP archives, and 'other' for other types of files.
-        Returns:
-            bool: True if the file matches the filter, False otherwise.
-        """
-        if 'img' in filter.lower():
-            return is_image(fpath)
-        elif 'doc' in filter.lower():
-            return is_document(fpath)
-        elif 'zip' in filter.lower():
-            return is_zip(fpath)
-        else:
-            return False
-
-    def is_image(fpath):
-        mime_type, _ = mimetypes.guess_type(fpath)
-        if mime_type and mime_type.startswith('image'):
-            return True
-        else:
-            return False
-
-    def is_document(fpath):
-        mime_type, _ = mimetypes.guess_type(fpath)
-        if mime_type and (
-            mime_type.startswith('text/') or
-            mime_type == 'application/pdf' or
-            mime_type == 'application/msword' or
-            mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
-            mime_type == 'application/vnd.ms-excel' or
-            mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
-            mime_type == 'application/vnd.ms-powerpoint' or
-            mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-        ):
-            return True
-        else:
-            return False
-
-    def is_zip(fpath):
-        mime_type, _ = mimetypes.guess_type(fpath)
-        if mime_type == 'application/zip':
-            return True
-        else:
-            return False
-
     if not kind.startswith("."):
         kind = "." + kind
 
@@ -894,8 +1358,10 @@ def listdir(
                 os.path.isfile(item_path)
             )
             if kind in ['.doc','.img','.zip']: #选择大的类别
-                if kind != ".folder" and not istype(item_path, kind):
+                if kind != ".folder" and not isa(item_path, kind):
                     continue
+            elif kind in ['.all']:
+                return flist(fpath, contains=contains)
             else: #精确到文件的后缀
                 if not is_folder and not is_file:
                     continue
@@ -968,26 +1434,45 @@ def func_list(lib_name, opt="call"):
         funcs = dir(lib_name)
     return funcs
 
-def newfolder(pardir, chdir):
-    import os
+def newfolder(*args, **kwargs):
+    """
+    newfolder(pardir, chdir)
+
+    Args:
+        pardir (dir): parent dir
+        chdir (str): children dir
+        overwrite (bool): overwrite?
+
+    Returns:
+        mkdir, giving a option if exists_ok or not
+    """
+    overwrite=kwargs.get("overwrite",False)
+    for arg in args:
+        if isinstance(arg, str):
+            if "/" in arg or "\\" in arg:
+                pardir=arg
+                print(f'pardir{pardir}')
+            else:
+                chdir = arg
+                print(f'chdir{chdir}')
+        elif isinstance(arg,bool):
+            overwrite=arg
+            print(overwrite)
+        else:
+            print(f"{arg}Error: not support a {type(arg)} type")
     rootdir = []
     # Convert string to list
     if isinstance(chdir, str):
         chdir = [chdir]
-
     # Subfoldername should be unique
     chdir = list(set(chdir))
-
     if isinstance(pardir, str):  # Dir_parents should be 'str' type
         pardir = os.path.normpath(pardir)
-
     # Get the slash type: "/" or "\"
     stype = '/' if '/' in pardir else '\\'
-
     # Check if the parent directory exists and is a directory path
     if os.path.isdir(pardir):
         os.chdir(pardir)  # Set current path
-
         # Check if subdirectories are not empty
         if chdir:
             chdir.sort()
@@ -999,22 +1484,21 @@ def newfolder(pardir, chdir):
                     os.mkdir('./' + folder)
                     print(f'\n {folder} was created successfully!\n')
                 else:
-                    print(f'\n {folder} already exists! \n')
-
+                    if overwrite:
+                        shutil.rmtree(child_tmp)
+                        os.mkdir('./' + folder)
+                        print(f'\n {folder} overwrite! \n')
+                    else:
+                        print(f'\n {folder} already exists! \n')
                 rootdir.append(child_tmp + stype)  # Note down
-
         else:
             print('\nWarning: Dir_child doesn\'t exist\n')
-
     else:
         print('\nWarning: Dir_parent is not a directory path\n')
-
     # Dir is the main output, if only one dir, then str type is inconvenient
     if len(rootdir) == 1:
         rootdir = rootdir[0]
-
     return rootdir
- 
 
 def figsave(*args,dpi=300):
     DirSave = None
