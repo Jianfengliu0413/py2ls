@@ -1,51 +1,52 @@
 from scipy.ndimage import convolve1d
-import numpy as np
-import pandas as pd
-import json
-import matplotlib.pyplot as plt
-import seaborn as sns
-# import scienceplots
-import matplotlib
-import sys
-import os
 from scipy.signal import savgol_filter
 import pingouin as pg
 from scipy import stats
+
+import numpy as np
+import pandas as pd
+
+import json
+import matplotlib
+import matplotlib.pyplot as plt
 import matplotlib.ticker as tck 
+from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
+
+import sys, os,shutil,re, yaml,json
 from cycler import cycler
-import re
+import time
+from dateutil import parser
+from datetime import datetime
+
 from PIL import Image,ImageEnhance, ImageOps,ImageFilter
 from rembg import remove,new_session
-from mpl_toolkits.mplot3d import Axes3D
+
 import docx
-import pandas as pd
 from fpdf import FPDF 
-import yaml
 from lxml import etree 
 from docx import Document
 from PyPDF2 import PdfReader
 from pdf2image import convert_from_path, pdfinfo_from_path
-from nltk.tokenize import sent_tokenize,word_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize
 import nltk  # nltk.download("punkt")
 from docx2pdf import convert
 import img2pdf as image2pdf
-import pprint
+import nbformat
+from nbconvert import MarkdownExporter
+
 from itertools import pairwise
-import time
 from box import Box, BoxList
 from numerizer import numerize
 from tqdm import tqdm
 import mimetypes
 from pprint import pp
-from dateutil import parser
-from datetime import datetime
 from collections import Counter
 from fuzzywuzzy import fuzz,process
-from py2ls import netfinder
 from langdetect import detect
-import shutil
 from duckduckgo_search import DDGS
 
+from py2ls import netfinder
 
 dir_save='/Users/macjianfeng/Dropbox/Downloads/'
 
@@ -157,102 +158,10 @@ def ai(*args, **kwargs):
     return echo(**kwargs)
 
 def detect_lang(text, output='lang',verbose=True):
-    lang_code_iso639={'Abkhazian': 'ab',
-                     'Afar': 'aa',
-                     'Afrikaans': 'af',
-                     'Akan': 'ak',
-                     'Albanian': 'sq',
-                     'Amharic': 'am',
-                     'Arabic': 'ar',
-                     'Armenian': 'hy',
-                     'Assamese': 'as',
-                     #  'Avaric': 'av',
-                     'Aymara': 'ay',
-                     'Azerbaijani': 'az',
-                     'Bashkir': 'ba',
-                     'Basque': 'eu',
-                     'Belarusian': 'be',
-                     'Bislama': 'bi',
-                     'Breton': 'br',
-                     'Burmese': 'my',
-                     'Catalan, Valencian': 'ca',
-                     'Chamorro': 'ch',
-                     'Chichewa, Chewa, Nyanja': 'ny',
-                     'Chinese': 'zh',
-                     'Corsican': 'co',
-                     'Cree': 'cr',
-                     'Croatian': 'hr',
-                     'Danish': 'da',
-                     'Dutch, Flemish': 'nl',
-                     'Dzongkha': 'dz',
-                     'English': 'en',
-                     'Finnish': 'fi',
-                     'French': 'fr',
-                     'Galician': 'gl',
-                     'Georgian': 'ka',
-                     'German': 'de',
-                     'Greek, Modern (1453–)': 'el',
-                     'Gujarati': 'gu',
-                     'Hausa': 'ha',
-                     'Hebrew': 'he',
-                     'Hindi': 'hi',
-                     'Hungarian': 'hu',
-                     'Icelandic': 'is',
-                     'Italian': 'it',
-                     'Kikuyu, Gikuyu': 'ki',
-                     'Korean': 'ko',
-                     'Kurdish': 'ku',
-                     'Latin': 'la',
-                     'Limburgan, Limburger, Limburgish': 'li',
-                     'Luba-Katanga': 'lu',
-                     'Macedonian': 'mk',
-                     'Malay': 'ms',
-                     'Nauru': 'na',
-                     'North Ndebele': 'nd',
-                     'Nepali': 'ne',
-                     'Norwegian': 'no',
-                     'Norwegian Nynorsk': 'nn',
-                     'Sichuan Yi, Nuosu': 'ii',
-                     'Occitan': 'oc',
-                     'Ojibwa': 'oj',
-                     'Oriya': 'or',
-                     'Ossetian, Ossetic': 'os',
-                     'Persian': 'fa',
-                     'Punjabi, Panjabi': 'pa',
-                     'Quechua': 'qu',
-                     'Romanian, Moldavian, Moldovan': 'ro',
-                     'Russian': 'ru',
-                     'Samoan': 'sm',
-                     'Sanskrit': 'sa',
-                     'Serbian': 'sr',
-                     'Shona': 'sn',
-                     'Sinhala, Sinhalese': 'si',
-                     'Slovenian': 'sl',
-                     'Somali': 'so',
-                     'Sundanese': 'su',
-                     'Swahili': 'sw',
-                     'Swati': 'ss',
-                     'Tajik': 'tg',
-                     'Tamil': 'ta',
-                     'Telugu': 'te',
-                     'Thai': 'th',
-                     'Tibetan': 'bo',
-                     'Tigrinya': 'ti',
-                     'Tonga (Tonga Islands)': 'to',
-                     'Tsonga': 'ts',
-                     'Twi': 'tw',
-                     'Ukrainian': 'uk',
-                     'Urdu': 'ur',
-                     'Uzbek': 'uz',
-                     'Venda': 've',
-                     'Vietnamese': 'vi',
-                     'Volapük': 'vo',
-                     'Welsh': 'cy',
-                     'Wolof': 'wo',
-                     'Xhosa': 'xh',
-                     'Yiddish': 'yi',
-                     'Yoruba': 'yo',
-                     'Zulu': 'zu'}
+    dir_curr_script=os.path.dirname(os.path.abspath(__file__))
+    dir_lang_code=dir_curr_script+"/data/lang_code_iso639.json"
+    print(dir_curr_script,os.getcwd(),dir_lang_code)
+    lang_code_iso639=fload(dir_lang_code)
     l_lang,l_code = [],[]
     [[l_lang.append(v),l_code.append(k)] for v,k in lang_code_iso639.items()]
     try:
@@ -340,21 +249,7 @@ def counter(list_, verbose=True):
 # print(f"Return a list of the n most common elements:\n{c.most_common()}")
 # print(f"Compute the sum of the counts:\n{c.total()}")
 
-def is_num(s):
-    """
-    Check if a string can be converted to a number (int or float).
-    Parameters:
-    - s (str): The string to check.
-    Returns:
-    - bool: True if the string can be converted to a number, False otherwise.
-    """
-    try:
-        float(s)  # Try converting the string to a float
-        return True
-    except ValueError:
-        return False
-def isnum(s):
-    return is_num(s)
+
 
 def str2time(time_str, fmt='24'):
     """
@@ -600,6 +495,7 @@ def paper_size(paper_type_str='a4'):
     if not paper_type:
         paper_type='a4' # default
     return df[paper_type].tolist()
+
 def docx2pdf(dir_docx, dir_pdf=None):
     if dir_pdf:
         convert(dir_docx,dir_pdf)
@@ -815,7 +711,7 @@ def pdf2img(dir_pdf, dir_save=None, page=None, kind="png",verbose=True, **kws):
     df_dir_img_single_page = pd.DataFrame()
     dir_single_page = []
     if verbose:
-        pprint.pp(pdfinfo_from_path(dir_pdf))
+        pp(pdfinfo_from_path(dir_pdf))
     if isinstance(page, tuple) and page:
         page = list(page)
     if isinstance(page,int):
@@ -888,7 +784,14 @@ def fload(fpath, kind=None, **kwargs):
     def load_xlsx(fpath, **kwargs):
         df = pd.read_excel(fpath, **kwargs)
         return df
-
+    def load_ipynb(fpath,**kwargs):
+        as_version=kwargs.get("as_version",4)
+        with open(fpath, "r") as file:
+            nb = nbformat.read(file, as_version=as_version)
+            md_exporter = MarkdownExporter()
+            md_body, _ = md_exporter.from_notebook_node(nb)
+        return md_body
+    
     def load_pdf(fpath, page='all', verbose=False, **kwargs):
         """
             Parameters:
@@ -950,7 +853,7 @@ def fload(fpath, kind=None, **kwargs):
 
     kind = kind.lstrip('.').lower()
     img_types=[ 'bmp','eps', 'gif', 'icns', 'ico', 'im', 'jpg','jpeg', 'jpeg2000','msp', 'pcx', 'png', 'ppm', 'sgi', 'spider', 'tga','tiff','webp',"json"]
-    doc_types = ["docx", "txt", "md", "html", "json", "yaml", "xml", "csv", "xlsx", "pdf"]
+    doc_types = ["docx", "txt", "md", "html", "json", "yaml", "xml", "csv", "xlsx", "pdf","ipynb"]
     supported_types = [*doc_types, *img_types]
     if kind not in supported_types:
         raise ValueError(f"Error:\n{kind} is not in the supported list {supported_types}")
@@ -970,6 +873,8 @@ def fload(fpath, kind=None, **kwargs):
         return load_csv(fpath, **kwargs)
     elif kind == "xlsx":
         return load_xlsx(fpath, **kwargs)
+    elif kind == "ipynb":
+        return load_ipynb(fpath, **kwargs)
     elif kind == "pdf":
         print('usage:load_pdf(fpath, page="all", verbose=False)')
         return load_pdf(fpath, **kwargs)
@@ -1285,42 +1190,19 @@ def isa(*args,**kwargs):
     elif 'zip' in contains.lower():
         return is_zip(fpath)
     elif 'dir' in contains.lower() or ('f' in contains.lower() and 'd' in contains.lower()):
-        return bool(('/' in fpath) or ('\\' in fpath))
+        return os.path.isdir(fpath)
     elif 'fi' in contains.lower():#file
         return os.path.isfile(fpath)
+    elif 'num' in contains.lower():#file
+        return os.path.isfile(fpath)
+    elif 'text' in contains.lower() or 'txt' in contains.lower():#file
+        return is_text(fpath)
+    elif 'color' in contains.lower():#file
+        return is_str_color(fpath)
     else:
         print(f"{contains} was not set up correctly")
         return False
 
-def is_image(fpath):
-    mime_type, _ = mimetypes.guess_type(fpath)
-    if mime_type and mime_type.startswith('image'):
-        return True
-    else:
-        return False
-
-def is_document(fpath):
-    mime_type, _ = mimetypes.guess_type(fpath)
-    if mime_type and (
-        mime_type.startswith('text/') or
-        mime_type == 'application/pdf' or
-        mime_type == 'application/msword' or
-        mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
-        mime_type == 'application/vnd.ms-excel' or
-        mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
-        mime_type == 'application/vnd.ms-powerpoint' or
-        mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-    ):
-        return True
-    else:
-        return False
-
-def is_zip(fpath):
-    mime_type, _ = mimetypes.guess_type(fpath)
-    if mime_type == 'application/zip':
-        return True
-    else:
-        return False
 def listdir(
     rootdir,
     kind="folder",
@@ -1428,21 +1310,15 @@ def list_func(lib_name, opt="call"):
         funcs = dir(lib_name)
     return funcs
 def func_list(lib_name, opt="call"):
-    if opt == "call":
-        funcs = [func for func in dir(lib_name) if callable(getattr(lib_name, func))]
-    else:
-        funcs = dir(lib_name)
-    return funcs
+    return list_func(lib_name, opt=opt)
 
 def newfolder(*args, **kwargs):
     """
     newfolder(pardir, chdir)
-
     Args:
         pardir (dir): parent dir
         chdir (str): children dir
         overwrite (bool): overwrite?
-
     Returns:
         mkdir, giving a option if exists_ok or not
     """
@@ -1501,33 +1377,29 @@ def newfolder(*args, **kwargs):
     return rootdir
 
 def figsave(*args,dpi=300):
-    DirSave = None
+    dir_save = None
     fname = None 
-
     for arg in args:
         if isinstance(arg, str):
             if '/' in arg or '\\' in arg:
-                DirSave = arg
+                dir_save = arg
             elif '/' not in arg and '\\' not in arg:
                 fname = arg
-
     # Backup original values
-    if '/' in DirSave:
-        if DirSave[-1] != '/':
-            DirSave = DirSave + '/'
-    elif '\\' in DirSave:
-        if DirSave[-1] != '\\':
-            DirSave = DirSave + '\\'
+    if '/' in dir_save:
+        if dir_save[-1] != '/':
+            dir_save = dir_save + '/'
+    elif '\\' in dir_save:
+        if dir_save[-1] != '\\':
+            dir_save = dir_save + '\\'
     else:
-        raise ValueError('Check the Path of DirSave Directory')
-
+        raise ValueError('Check the Path of dir_save Directory')
     ftype = fname.split('.')[-1]
     if len(fname.split('.')) == 1:
         ftype = 'nofmt'
-        fname = DirSave + fname + '.' + ftype
+        fname = dir_save + fname + '.' + ftype
     else:
-        fname = DirSave + fname
-
+        fname = dir_save + fname
     # Save figure based on file type
     if ftype.lower() == 'eps':
         plt.savefig(fname, format='eps', bbox_inches='tight')
@@ -1552,7 +1424,6 @@ def figsave(*args,dpi=300):
         plt.savefig(fname, format='emf', dpi=dpi, bbox_inches='tight')
     elif ftype.lower() == 'fig':
         plt.savefig(fname, format='pdf', bbox_inches='tight',dpi=dpi)
-
     print(f'\nSaved @: dpi={dpi}\n{fname}')
 
 
@@ -1586,8 +1457,6 @@ def FuncStars(ax,
               report=None,
               report_scale=-0.1,
               report_loc=None):
-
-
     if ax is None:
         ax = plt.gca()
     if Ylim is None:
@@ -1598,11 +1467,9 @@ def FuncStars(ax,
         report_loc = np.min(Ylim) + report_scale*np.abs(np.diff(Ylim))
     if report_scale > 0:
         report_scale = -np.abs(report_scale)
-
     yscale = np.float64(yscale)
     y_loc = np.min(Ylim) + yscale*(np.max(Ylim)-np.min(Ylim))
     xcenter = np.mean([x1, x2])
-
     # ns / *
     if alpha < pval:
         if nsshow == 'on':
@@ -1626,7 +1493,6 @@ def FuncStars(ax,
         plt.text(xcenter, y_loc, symbol * 3,
                  ha='center', va='center_baseline',
                  fontsize=fontsize, fontname=fontname, color=symbolcolor)
-
     # lines indicators
     if linego:  # and 0 < pval <= 0.05:
         print(pval)
@@ -1666,12 +1532,10 @@ def FuncStars(ax,
                      [np.min(Ylim) + 0.95*(np.max(Ylim)-np.min(Ylim)) - np.abs(np.diff(Ylim)) * tailindicator[1],
                       np.min(Ylim) + 0.95*(np.max(Ylim)-np.min(Ylim)) - np.abs(np.diff(Ylim)) * 0.002],
                      linestyle=linestyle, color=linecolor, linewidth=linewidth)
-
     if values_below is not None:
         plt.text(xcenter, y_loc * (-0.1), values_below,
                  ha='center', va='bottom',  # 'center_baseline', rotation=rotation,
                  fontsize=fontsize_note, fontname=fontname, color='k')
-
     # report / comments
     if report is not None:
         plt.text(xcenter, report_loc, report,
@@ -1681,7 +1545,49 @@ def is_str_color(s):
     # Regular expression pattern for hexadecimal color codes
     color_code_pattern = r"^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$"
     return re.match(color_code_pattern, s) is not None
-
+def is_num(s):
+    """
+    Check if a string can be converted to a number (int or float).
+    Parameters:
+    - s (str): The string to check.
+    Returns:
+    - bool: True if the string can be converted to a number, False otherwise.
+    """
+    try:
+        float(s)  # Try converting the string to a float
+        return True
+    except ValueError:
+        return False
+def isnum(s):
+    return is_num(s)
+def is_image(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type and mime_type.startswith('image'):
+        return True
+    else:
+        return False
+def is_document(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type and (
+        mime_type.startswith('text/') or
+        mime_type == 'application/pdf' or
+        mime_type == 'application/msword' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
+        mime_type == 'application/vnd.ms-excel' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
+        mime_type == 'application/vnd.ms-powerpoint' or
+        mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ):
+        return True
+    else:
+        return False
+def is_zip(fpath):
+    mime_type, _ = mimetypes.guess_type(fpath)
+    if mime_type == 'application/zip':
+        return True
+    else:
+        return False
+    
 def stdshade(ax=None,*args, **kwargs):
     if (
         isinstance(ax, np.ndarray)
@@ -1703,7 +1609,6 @@ def stdshade(ax=None,*args, **kwargs):
     l_style2 = ["--", "-."]
     l_style1 = ["-", ":"]
     l_mark = ["o", "+", "*", ".", "x", "_", "|", "s", "d", "^", "v", ">", "<", "p", "h"]
-
     # Check each argument
     for iarg in range(len(args)):
         if (
@@ -1816,8 +1721,6 @@ def stdshade(ax=None,*args, **kwargs):
     else:
         line = ax.plot(x, yMean, color=acolor, ls=plotStyle, marker=plotMarker, **line_kws)
     return line[0], fill
-
-
 # =============================================================================
 # # for plot figures {Qiu et al.2023}
 # =============================================================================
@@ -1997,7 +1900,6 @@ def FuncCmpt(X1, X2, pmc='auto', pair='unpaired'):
     output, p = sub_cmpt_2group(
         X1, X2, cfg_pmc=cfg_pmc, pair=cfg_pair)
     return p, output
-
 
 # ======compare 2 group test===================================================
 # # Example
@@ -2320,7 +2222,6 @@ def FuncMultiCmpt(pmc='pmc', pair='unpair', data=None, dv=None, factor=None,
         'both' in cfg_pair) else None
     go_mix_within = factor if ('pa' in cfg_pair) or (
         'np' not in cfg_pair) else None
-
     if res_tab['p-unc'][0] <= .05:
         # Pairwise Comparisons
         method_post_hoc = [
@@ -2334,7 +2235,6 @@ def FuncMultiCmpt(pmc='pmc', pair='unpair', data=None, dv=None, factor=None,
         for met in method_post_hoc:
             post_curr = pg.pairwise_tests(data=data, dv=dv, between=go_mix_between, within=go_mix_within, subject=go_subject, parametric=go_pmc, marginal=True, alpha=0.05, alternative='two-sided',
                                           padjust=met)
-
             res_posthoc = pd.concat([res_posthoc, post_curr],
                                     ignore_index=True)
     else:
@@ -2354,7 +2254,6 @@ def FuncMultiCmpt(pmc='pmc', pair='unpair', data=None, dv=None, factor=None,
         output['res_tab']['APA'] = output['APA']  # note APA in the table
     # print(output['stat'])
     # print(output['res_tab'])
-
     return output
 
 
@@ -2580,18 +2479,14 @@ def str2list(str_):
 def load_img(fpath):
     """
     Load an image from the specified file path.
-
     Args:
         fpath (str): The file path to the image.
-
     Returns:
         PIL.Image: The loaded image.
-
     Raises:
         FileNotFoundError: If the specified file is not found.
         OSError: If the specified file cannot be opened or is not a valid image file.
     """
-
     try:
         img = Image.open(fpath)
         return img
@@ -2604,12 +2499,10 @@ def apply_filter(img, *args):
     # def apply_filter(img, filter_name, filter_value=None):
     """
     Apply the specified filter to the image.
-
     Args:
         img (PIL.Image): The input image.
         filter_name (str): The name of the filter to apply.
         **kwargs: Additional parameters specific to the filter.
-
     Returns:
         PIL.Image: The filtered image.
     """
@@ -2813,10 +2706,8 @@ def imgsets(
     def auto_enhance(img):
         """
         Automatically enhances the image based on its characteristics.
-
         Args:
             img (PIL.Image): The input image.
-
         Returns:
             dict: A dictionary containing the optimal enhancement values.
         """
@@ -2832,47 +2723,33 @@ def imgsets(
             bit_depth = 16
         else:
             raise ValueError("Unsupported image mode")
-
         # Calculate the brightness and contrast for each channel
         num_channels = len(img.getbands())
         brightness_factors = []
         contrast_factors = []
         for channel in range(num_channels):
             channel_histogram = img.split()[channel].histogram()
-            brightness = sum(i * w for i, w in enumerate(channel_histogram)) / sum(
-                channel_histogram
-            )
+            brightness = sum(i * w for i, w in enumerate(channel_histogram))/sum(channel_histogram)
             channel_min, channel_max = img.split()[channel].getextrema()
             contrast = channel_max - channel_min
-
             # Adjust calculations based on bit depth
             normalization_factor = 2**bit_depth - 1  # Max value for the given bit depth
-            brightness_factor = (
-                1.0 + (brightness - normalization_factor / 2) / normalization_factor
-            )
-            contrast_factor = (
-                1.0 + (contrast - normalization_factor / 2) / normalization_factor
-            )
-
+            brightness_factor = (1.0 + (brightness - normalization_factor / 2) / normalization_factor)
+            contrast_factor = (1.0 + (contrast - normalization_factor / 2) / normalization_factor)
             brightness_factors.append(brightness_factor)
             contrast_factors.append(contrast_factor)
-
         # Calculate the average brightness and contrast factors across channels
         avg_brightness_factor = sum(brightness_factors) / num_channels
         avg_contrast_factor = sum(contrast_factors) / num_channels
-
         return {"brightness": avg_brightness_factor, "contrast": avg_contrast_factor}
-
     # Load image if input is a file path
     if isinstance(img, str):
         img = load_img(img)
-
     img_update = img.copy()
     # Auto-enhance image if requested
     if auto:
         auto_params = auto_enhance(img_update)
         sets.update(auto_params)
-
     if sets is None:
         sets = {}
     for k, value in sets.items():
@@ -2947,12 +2824,9 @@ def imgsets(
                 if len(value)==3:
                     value+=(255,)
                 img_update = remove(img_update, bgcolor=value)
-    
     if filter_kws:
         for filter_name, filter_value in filter_kws.items():
             img_update = apply_filter(img_update, filter_name, filter_value)
-
-
     # Display the image if requested
     if show:
         if figsize is None:
@@ -2961,7 +2835,6 @@ def imgsets(
             plt.figure(figsize=figsize, dpi=dpi)
         plt.imshow(img_update)
         plt.axis("on") if show_axis else plt.axis("off")
-
     return img_update
 # # usage:
 # img = imgsets(
@@ -2982,7 +2855,6 @@ def figsets(*args):
         "scatter","ieee","no-latex","std-colors","high-vis","bright","dark_background","science",
         "high-vis","vibrant","muted","retro","grid","high-contrast","light","cjk-tc-font","cjk-kr-font",
     ]
-
     def sets_priority(ax,key, value):
         if ("fo" in key) and (("size" in key) or ("sz" in key)):
             fontsize=value
