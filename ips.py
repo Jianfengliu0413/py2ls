@@ -5,11 +5,12 @@ import json
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tck 
-from mpl_toolkits.mplot3d import Axes3D
-# import seaborn as sns
-
-import sys, os,shutil,re, yaml,json
 from cycler import cycler
+from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
+
+import sys, os,shutil,re, yaml,json,subprocess
+import importlib.util
 import time
 from dateutil import parser
 from datetime import datetime
@@ -22,6 +23,8 @@ from fpdf import FPDF
 from lxml import etree 
 from docx import Document
 from PyPDF2 import PdfReader
+from pptx import Presentation
+from pptx.util import Inches
 from pdf2image import convert_from_path, pdfinfo_from_path
 from nltk.tokenize import sent_tokenize, word_tokenize
 import nltk  # nltk.download("punkt")
@@ -43,8 +46,51 @@ from duckduckgo_search import DDGS
 
 from py2ls import netfinder
 
+try:
+    get_ipython().run_line_magic('load_ext', 'autoreload')
+    get_ipython().run_line_magic('autoreload', '2')
+except NameError:
+    pass
+
+def is_package_installed(package_name):
+    """Check if a package is installed."""
+    package_spec = importlib.util.find_spec(package_name)
+    return package_spec is not None
+        
+def upgrade(module='py2ls'):
+    # try:
+    #     pkg_resources.get_distribution(module)
+    # except pkg_resources.DistributionNotFound:
+    #     subprocess.check_call([sys.executable, "-m", "pip", "install", module])
+    if not is_package_installed(module):
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", module])
+        except subprocess.CalledProcessError as e:
+            print(f"An error occurred while installing {module}: {e}")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", module])
+    except subprocess.CalledProcessError as e:
+        print(f"An error occurred while upgrading py2ls: {e}")
+upgrade()
+
 dir_save='/Users/macjianfeng/Dropbox/Downloads/'
 
+
+def get_version(pkg):
+    import importlib.metadata
+    def get_v(pkg_name):
+        try:
+            version = importlib.metadata.version(pkg_name)
+            print(f"version {pkg_name} == {version}")
+        except importlib.metadata.PackageNotFoundError:
+            print(f"Package '{pkg_name}' not found")
+    if isinstance(pkg,str):
+        get_v(pkg)
+    elif isinstance(pkg,list):
+        [get_v(pkg_) for pkg_ in pkg]
+# usage: 
+# get_version(['pandas','numpy','py2ls'])
+        
 def rm_folder(folder_path, verbose=True):
     try:
         shutil.rmtree(folder_path)
@@ -182,14 +228,10 @@ def echo(*args,**kwargs):
     return res
 
 def chat(*args, **kwargs):
-    if len(args) == 1 and isinstance(args[0], str):
-        kwargs['query'] = args[0]
-    return echo(**kwargs)
+    return echo(*args, **kwargs)
 
 def ai(*args, **kwargs):
-    if len(args) == 1 and isinstance(args[0], str):
-        kwargs['query'] = args[0]
-    return echo(**kwargs)
+    return echo(*args, **kwargs)
 
 def detect_lang(text, output='lang',verbose=True):
     dir_curr_script=os.path.dirname(os.path.abspath(__file__))
@@ -581,6 +623,31 @@ def img2pdf(dir_img, kind="jpeg",page=None, dir_save=None, page_size="a4", dpi=3
 # usage:
 # dir_img="/Users/macjianfeng/Dropbox/00-Personal/2015-History/2012-2015_兰州大学/120901-大学课件/生物统计学 陆卫/复习题/"
 # img2pdf(dir_img,kind='tif', page=range(3,7,2))
+
+def pdf2ppt(dir_pdf, dir_ppt):
+    prs = Presentation()
+
+    # Open the PDF file
+    with open(dir_pdf, "rb") as f:
+        reader = PdfReader(f)
+        num_pages = len(reader.pages)
+
+        # Iterate through each page in the PDF
+        for page_num in range(num_pages):
+            page = reader.pages[page_num]
+            text = page.extract_text()
+
+            # Add a slide for each page's content
+            slide_layout = prs.slide_layouts[5]  # Use slide layout that suits your needs
+            slide = prs.slides.add_slide(slide_layout)
+            slide.shapes.title.text = f"Page {page_num + 1}"
+            slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5)).text = text
+
+    # Save the PowerPoint presentation
+    prs.save(dir_ppt)
+    print(f"Conversion from {dir_pdf} to {dir_ppt} complete.")
+
+
 def ssplit(text, by="space", verbose=False, **kws):
     if isinstance(text, list):
         nested_list= [ssplit(i,by=by,verbose=verbose,**kws) for i in text]
@@ -2008,7 +2075,9 @@ def figsets(*args):
         # tick location
         if "tic" in key.lower() or "tk" in key.lower():
             if ("loc" in key.lower()) or ("po" in key.lower()):
-                if isinstance(value, (str, list)):
+                if isinstance(value,str):
+                    value=[value]
+                if isinstance(value, list):
                     loc = []
                     for i in value:
                         if ("l" in i.lower()) and ("a" not in i.lower()):
@@ -2028,16 +2097,22 @@ def figsets(*args):
                             ax.yaxis.set_ticks_position("none")
             # ticks / labels
             elif "x" in key.lower():
+                if value is None:
+                    value=[]
                 if "la" not in key.lower():
                     ax.set_xticks(value)
                 if "la" in key.lower():
                     ax.set_xticklabels(value)
             elif "y" in key.lower():
+                if value is None:
+                    value=[]
                 if "la" not in key.lower():
                     ax.set_yticks(value)
                 if "la" in key.lower():
                     ax.set_yticklabels(value)
             elif "z" in key.lower():
+                if value is None:
+                    value=[]
                 if "la" not in key.lower():
                     ax.set_zticks(value)
                 if "la" in key.lower():
@@ -2291,7 +2366,7 @@ def dir_lib(lib_oi):
 # dir_lib("seaborn") 
 
 # set up the colorlist, give the number, or the colormap's name
-def get_color(n=1, cmap="auto", how="start"):
+def get_color(n=1, cmap="auto", how="start",alpha=1.0):
     # Extract the colormap as a list
     def cmap2hex(cmap_name):
         cmap_ = matplotlib.pyplot.get_cmap(cmap_name)
@@ -2319,6 +2394,14 @@ def get_color(n=1, cmap="auto", how="start"):
             """Converts a list of hexadecimal color codes to a list of RGB values."""
             rgb_values = [hex_to_rgb(hex_color) for hex_color in hex_colors]
             return rgb_values
+    def add_alpha(hex_color, alpha):
+        """Adds an alpha value to a hexadecimal color code."""
+        if hex_color.startswith("#"):
+            hex_color = hex_color.lstrip("#")
+        rgb = tuple(int(hex_color[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+        rgba = rgb + (alpha,)
+        return matplotlib.colors.to_hex(rgba)
+    
     if "aut" in cmap:
         colorlist = [
             "#474747",
@@ -2331,19 +2414,17 @@ def get_color(n=1, cmap="auto", how="start"):
         ]
     else:
         colorlist = cmap2hex(cmap)
+
+    colorlist = [add_alpha(color, alpha) for color in colorlist]
     if "st" in how.lower() or "be" in how.lower():
         # cycle it
         clist = cycle2list(colorlist, n=n)
     if "l" in how.lower() or "p" in how.lower():
         clist = []
-        [
-            clist.append(colorlist[i])
-            for i in [int(i) for i in np.linspace(0, len(colorlist) - 1, n)]
-        ]
+        [clist.append(colorlist[i]) 
+         for i in [int(i) for i in np.linspace(0, len(colorlist) - 1, n)]]
 
-    return clist  # a color list
-    # example usage: clist = get_color(4,cmap="auto", how="start") # get_color(4, cmap="hot", how="linspace")
-
+    return clist
 """ 
     # n = 7
     # clist = get_color(n, cmap="auto", how="linspace")  # get_color(100)
