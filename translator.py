@@ -59,7 +59,7 @@ def get_lang_code_iso639():
     lang_code_iso639=dict([*zip(fullname,shortcut)])
     return lang_code_iso639
 
-def detect_lang(text, output='lang',verbose=True):
+def detect_lang(text, output='lang',verbose=False):
     dir_curr_script=os.path.dirname(os.path.abspath(__file__))
     dir_lang_code=dir_curr_script+"/data/lang_code_iso639.json"
     with open(dir_lang_code, "r") as file:
@@ -85,7 +85,7 @@ def is_text(s):
     # no_special = not re.search(r'[^A-Za-z0-9\s]', s)
     return has_alpha and has_non_alpha
 
-def strcmp(search_term, candidates, ignore_case=True, verbose=True, scorer='WR'):
+def strcmp(search_term, candidates, ignore_case=True, verbose=False, scorer='WR'):
     """
     Compares a search term with a list of candidate strings and finds the best match based on similarity score.
 
@@ -392,6 +392,8 @@ def translate(
     Translate text to the target language using the specified translation method (Google Translate or DeepL).
     lang_src (str): e.g., 'english', or 'chinese' when there are two languages, then lang_src must be given
     """
+    # error_verbose = verbose or False
+
     if isinstance(text,list):
         text=merge_text(text)
     text = replace_text(text)
@@ -508,18 +510,19 @@ def translate_with_retry(
         lang_src = detect_lang(text) 
         lang_src = get_language_code(language=lang_src)
     lang = get_language_code(language=lang)
-    print(f"lang:{lang},lang_src:{lang_src}")
     try:
-        print(len(text))
         return try_translate(text,lang=lang,lang_src=lang_src,user_agent=user_agent,service_url=service_urls[0])
     except Exception as e:
-        print("Connection error:", e)
+        if error_verbose:
+            print("Connection error:", e)
         try: 
             time.sleep(1)
             return try_translate(text,lang=lang,lang_src=lang_src,user_agent=user_agent,service_url=service_urls[1])
         except Exception as e:
-            print(f"(translate_with_retry):Connection error with {service_urls}: {e}")
-        print("All service URLs failed. Unable to translate the text.")
+            if error_verbose:
+                print(f"(translate_with_retry):Connection error with {service_urls}: {e}")
+        if error_verbose:
+            print("All service URLs failed. Unable to translate the text.")
         return text
 
 

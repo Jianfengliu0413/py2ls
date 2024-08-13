@@ -1,0 +1,145 @@
+{
+    "c": [
+        "#474747",
+        "#FF2C00",
+        "#0C5DA5"
+    ],
+    "loc": {
+        "go": 0,
+        "xloc": [
+            1,
+            2,
+            3
+        ]
+    },
+    "style": {
+        "export": null
+    },
+    "layer": [
+        "b",
+        "bx",
+        "e",
+        "v",
+        "s",
+        "l"
+    ],
+    "b": {
+        "go": 1,
+        "loc": "c",
+        "FaceColor": [
+            "#474747",
+            "#FF2C00",
+            "#0C5DA5"
+        ],
+        "FaceAlpha": 1,
+        "EdgeColor": "k",
+        "EdgeAlpha": 1,
+        "LineStyle": "-",
+        "LineWidth": 0.8,
+        "x_width": 0.5,
+        "ShowBaseLine": "off",
+        "hatch": null
+    },
+    "e": {
+        "go": 1,
+        "loc": "l",
+        "LineWidth": 1,
+        "CapLineWidth": 1,
+        "CapSize": 2,
+        "Marker": "none",
+        "LineStyle": "none",
+        "LineColor": "k",
+        "LineJoin": "round",
+        "MarkerSize": "auto",
+        "FaceColor": [
+            "#474747",
+            "#FF2C00",
+            "#0C5DA5"
+        ],
+        "MarkerEdgeColor": [
+            "none"
+        ],
+        "Visible": true,
+        "Orientation": "vertical",
+        "error": "sem",
+        "x_width": 0.1,
+        "cap_dir": "b"
+    },
+    "s": {
+        "go": 1,
+        "loc": "r",
+        "FaceColor": "w",
+        "cmap": null,
+        "FaceAlpha": 1,
+        "x_width": 0.1,
+        "Marker": "o",
+        "MarkerSize": 15,
+        "LineWidth": 0.8,
+        "MarkerEdgeColor": "k"
+    },
+    "l": {
+        "go": 1,
+        "LineStyle": "-",
+        "LineColor": "k",
+        "LineWidth": 0.5,
+        "LineAlpha": 0.5
+    },
+    "bx": {
+        "go": 0,
+        "loc": "r",
+        "FaceColor": [
+            "#474747",
+            "#FF2C00",
+            "#0C5DA5"
+        ],
+        "EdgeColor": "k",
+        "FaceAlpha": 0.85,
+        "EdgeAlpha": 1,
+        "LineStyle": "-",
+        "x_width": 0.2,
+        "ShowBaseLine": "off",
+        "Notch": false,
+        "Outliers": "on",
+        "OutlierMarker": "+",
+        "OutlierColor": "r",
+        "OutlierSize": 6,
+        "Whisker": 0.5,
+        "Orientation": "vertical",
+        "BoxLineWidth": 0.5,
+        "WhiskerLineStyle": "-",
+        "WhiskerLineColor": "k",
+        "WhiskerLineWidth": 0.5,
+        "Caps": true,
+        "CapLineColor": "k",
+        "CapLineWidth": 0.5,
+        "CapSize": 0.2,
+        "MedianLine": true,
+        "MedianLineStyle": "-",
+        "MedianStyle": "line",
+        "MedianLineColor": "k",
+        "MedianLineWidth": 2,
+        "MedianLineTop": false,
+        "MeanLine": false,
+        "showmeans": false,
+        "MeanLineStyle": "-",
+        "MeanLineColor": "w",
+        "MeanLineWidth": 2
+    },
+    "v": {
+        "go": 0,
+        "x_width": 0.3,
+        "loc": "r",
+        "EdgeColor": "none",
+        "FaceColor": [
+            "#474747",
+            "#FF2C00",
+            "#0C5DA5"
+        ],
+        "FaceAlpha": 0.3,
+        "BandWidth": "scott",
+        "Function": "pdf",
+        "Kernel": "gau",
+        "NumPoints": 500,
+        "BoundaryCorrection": "reflection"
+    }
+}

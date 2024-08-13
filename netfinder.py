@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 import requests
 from requests.utils import dict_from_cookiejar
+from requests.exceptions import ChunkedEncodingError, ConnectionError
 import os
 from urllib.parse import urlparse, urljoin
 import base64
@@ -32,13 +33,13 @@ from datetime import datetime
 import time
 from py2ls import ips
 
-dir_save='/Users/macjianfeng/Dropbox/Downloads/'
+dir_save = "/Users/macjianfeng/Dropbox/Downloads/"
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # Suppress WDM INFO logs
-logging.getLogger('WDM').setLevel(logging.WARNING)
-proxies_glob=None
+logging.getLogger("WDM").setLevel(logging.WARNING)
+proxies_glob = None
 
 # Define supported content types and corresponding parsers
 CONTENT_PARSERS = {
@@ -48,13 +49,23 @@ CONTENT_PARSERS = {
     "text/plain": lambda text, parser: text.text,
 }
 
-def user_agent(browsers=["chrome", "edge", "firefox", "safari"], platforms=["pc", "tablet"],verbose=False,os=["windows", "macos", "linux"]):
-    ua = UserAgent(browsers=browsers, platforms=platforms,os=os)
+
+def user_agent(
+    browsers=["chrome", "edge", "firefox", "safari"],
+    platforms=["pc", "tablet"],
+    verbose=False,
+    os=["windows", "macos", "linux"],
+):
+    ua = UserAgent(browsers=browsers, platforms=platforms, os=os)
     output_ua = ua.random
     if verbose:
         print(output_ua)
-    return output_ua 
-def extract_text_from_content(content, content_type="text/html", where=None, what=None, extend=True, **kwargs):
+    return output_ua
+
+
+def extract_text_from_content(
+    content, content_type="text/html", where=None, what=None, extend=True, **kwargs
+):
     """
     Extracts text from the given content based on the specified content type and search criteria.
 
@@ -69,6 +80,7 @@ def extract_text_from_content(content, content_type="text/html", where=None, wha
     Returns:
     - list: A list of extracted text segments.
     """
+
     def extract_text(element):
         texts = ""
         if isinstance(element, str) and element.strip():
@@ -77,6 +89,7 @@ def extract_text_from_content(content, content_type="text/html", where=None, wha
             for child in element.children:
                 texts += extract_text(child)
         return texts
+
     if content is None:
         logger.error("Content is None, cannot extract text.")
         return []
@@ -87,70 +100,91 @@ def extract_text_from_content(content, content_type="text/html", where=None, wha
     if "json" in content_type:
         where = None
         return extract_text_from_json(content, where)
-    elif 'text' in content_type:
+    elif "text" in content_type:
         if isinstance(where, list):
-            res=[]
+            res = []
             for where_ in where:
-                res.extend(extract_text_from_content(content, content_type="text/html", where=where_, what=what, extend=extend, **kwargs))
+                res.extend(
+                    extract_text_from_content(
+                        content,
+                        content_type="text/html",
+                        where=where_,
+                        what=what,
+                        extend=extend,
+                        **kwargs,
+                    )
+                )
             return res
         else:
             search_kwargs = {**kwargs}
             # correct 'class_'
             # dict_=dict(class_="gsc_mnd_art_info")
-            if 'class_' in search_kwargs:
-                search_kwargs["class"]=search_kwargs["class_"]
-                del search_kwargs['class_']
+            if "class_" in search_kwargs:
+                search_kwargs["class"] = search_kwargs["class_"]
+                del search_kwargs["class_"]
             if what:
                 search_kwargs["class"] = what
-            if 'attrs' in kwargs:
+            if "attrs" in kwargs:
                 result_set = content.find_all(where, **search_kwargs)
-                print(f"attrs =>{search_kwargs}")
             else:
                 result_set = content.find_all(where, attrs=dict(**search_kwargs))
-                print(f"{search_kwargs}")
-            
+
             if not result_set:
                 print("Failed: check the 'attrs' setting:  attrs={'id':'xample'}")
             if extend:
                 texts = ""
                 for tag in result_set:
-                    texts += extract_text(tag) + "\n"
-                text_list = [tx.strip() for tx in texts.split("\n") if tx.strip()]
+                    texts = texts + " " + extract_text(tag) + " \n"
+                text_list = [tx.strip() for tx in texts.split(" \n") if tx.strip()]
                 return text_list
             else:
-                texts_ = " ".join(tag.get_text() for tag in result_set)
-                texts = [tx.strip() for tx in texts_.split("\n") if tx.strip()]
+                # texts_ = " ".join(tag.get_text() for tag in result_set)
+                texts_ = []
+                for tag in result_set:
+                    for child in tag.children:
+                        if child.name is None:
+                            texts_.append(child.strip())
+                # texts_=" ".join(texts_)
+                # texts = [tx.strip() for tx in texts_.split("\n") if tx.strip()]
+                texts = [tx.strip() for tx in texts_ if tx.strip()]
                 return texts
+
 
 def extract_text_from_json(content, key=None):
     if key:
         if isinstance(content, list):
-            return [str(item.get(key, '')) for item in content if key in item]
+            return [str(item.get(key, "")) for item in content if key in item]
         if isinstance(content, dict):
-            return [str(content.get(key, ''))]
+            return [str(content.get(key, ""))]
     else:
         return [str(value) for key, value in flatten_json(content).items()]
 
+
 def flatten_json(y):
     out = {}
-    def flatten(x, name=''):
+
+    def flatten(x, name=""):
         if isinstance(x, dict):
             for a in x:
-                flatten(x[a], name + a + '_')
+                flatten(x[a], name + a + "_")
         elif isinstance(x, list):
             i = 0
             for a in x:
-                flatten(a, name + str(i) + '_')
+                flatten(a, name + str(i) + "_")
                 i += 1
         else:
             out[name[:-1]] = x
+
     flatten(y)
     return out
+
 
 def get_proxy():
     list_ = []
     headers = {"User-Agent": user_agent()}
-    response = requests.get("https://free-proxy-list.net", headers=headers)
+    response = requests.get(
+        "https://free-proxy-list.net", headers=headers, timeout=30, stream=True
+    )
     content = BeautifulSoup(response.content, "html.parser")
     info = extract_text_from_content(content, where="td", extend=0)[0].split()
     count, pair_proxy = 0, 2
@@ -167,11 +201,18 @@ def get_proxy():
         "https": f"http://" + prox[1],
     }
     return proxies
+
+
 # proxies_glob=get_proxy()
-def get_soup(url, driver='req'):
-    _,soup_=fetch_all(url, driver=driver)
+def get_soup(url, driver="req"):
+    _, soup_ = fetch_all(url, driver=driver)
     return soup_
-def fetch_all(url, parser="lxml", driver='request', # request or selenium
+
+
+def fetch_all(
+    url,
+    parser="lxml",
+    driver="request",  # request or selenium
     by=By.TAG_NAME,
     timeout=10,
     retry=2,
@@ -188,7 +229,8 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
     proxy=None,  # Add proxy parameter
     javascript=True,  # Add JavaScript option
     disable_images=False,  # Add option to disable images
-    iframe_name=None):  # Add option to handle iframe):  # lxml is faster, # parser="html.parser"
+    iframe_name=None,
+):  # Add option to handle iframe):  # lxml is faster, # parser="html.parser"
     try:
         # # Generate a random user-agent string
         # response = requests.get(url)
@@ -197,21 +239,31 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
         # # get token from cookies
         # scrf_token=re.findall(r'csrf-token=(.*?);', response.headers.get('Set-Cookie'))[0]
         # headers = {"User-Agent": user_agent(), "X-CSRF-Token":scrf_token}
-        
+
         headers = {"User-Agent": user_agent()}
-        if 'req' in driver.lower():
-            response = requests.get(url, headers=headers,proxies=proxies_glob)
+        if "req" in driver.lower():
+            response = requests.get(
+                url, headers=headers, proxies=proxies_glob, timeout=30, stream=True
+            )
 
             # If the response is a redirect, follow it
             while response.is_redirect:
                 logger.info(f"Redirecting to: {response.headers['Location']}")
-                response = requests.get(response.headers["Location"], headers=headers,proxies=proxies_glob)
+                response = requests.get(
+                    response.headers["Location"],
+                    headers=headers,
+                    proxies=proxies_glob,
+                    timeout=30,
+                    stream=True,
+                )
             # Check for a 403 error
             if response.status_code == 403:
                 logger.warning("403 Forbidden error. Retrying...")
                 # Retry the request after a short delay
                 sleep(random.uniform(1, 3))
-                response = requests.get(url, headers=headers,proxies=proxies_glob)
+                response = requests.get(
+                    url, headers=headers, proxies=proxies_glob, timeout=30, stream=True
+                )
                 # Raise an error if retry also fails
                 response.raise_for_status()
 
@@ -219,11 +271,13 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
             response.raise_for_status()
 
             # Get the content type
-            content_type = response.headers.get("content-type", "").split(";")[0].lower()
+            content_type = (
+                response.headers.get("content-type", "").split(";")[0].lower()
+            )
             if response.encoding:
                 content = response.content.decode(response.encoding)
             else:
-                content=None
+                content = None
             # logger.info(f"Content type: {content_type}")
 
             # Check if content type is supported
@@ -232,14 +286,14 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
             else:
                 logger.warning("Unsupported content type")
                 return None, None
-        elif 'se' in driver.lower():
+        elif "se" in driver.lower():
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument(f"user-agent={user_agent()}")
             if proxy:
-                chrome_options.add_argument(f'--proxy-server={proxy}')
+                chrome_options.add_argument(f"--proxy-server={proxy}")
             if disable_images:
                 prefs = {"profile.managed_default_content_settings.images": 2}
                 chrome_options.add_experimental_option("prefs", prefs)
@@ -247,9 +301,11 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
             service = Service(ChromeDriverManager().install())
 
             driver_ = webdriver.Chrome(service=service, options=chrome_options)
-            
+
             if not javascript:
-                driver_.execute_cdp_cmd("Emulation.setScriptExecutionDisabled", {"value": True})
+                driver_.execute_cdp_cmd(
+                    "Emulation.setScriptExecutionDisabled", {"value": True}
+                )
 
             if login_url:
                 driver_.get(login_url)
@@ -264,7 +320,7 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
                 ).click()
 
             driver_.get(url)
-            
+
             if iframe_name:
                 iframe = WebDriverWait(driver_, timeout).until(
                     EC.presence_of_element_located((By.NAME, iframe_name))
@@ -278,14 +334,16 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
             driver_.quit()
 
             content = BeautifulSoup(page_source, "html.parser")
-            if content: 
-                return 'text/html', content
+            if content:
+                return "text/html", content
             else:
                 logger.warning("Selenium could not fetch content")
                 return None, None
     except requests.RequestException as e:
-        logger.error(f"Error fetching URL '{url}': {e}")  
-        return None, None 
+        logger.error(f"Error fetching URL '{url}': {e}")
+        return None, None
+
+
 # # Function to change Tor IP address
 # def renew_tor_ip():
 #     with Controller.from_port(port=9051) as controller:
@@ -316,14 +374,14 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
 #     content_type, soup = fetch_all(url,driver=driver)
 #     if soup:
 #         base_url = urlparse(url)
-        
+
 #         # Extract links from both 'href' and 'src' attributes across relevant tags
 #         tags_with_links = ['a', 'img', 'script', 'link', 'iframe', 'embed','span']
 #         elements = []
 #         for tag in tags_with_links:
 #             elements.extend(soup.find_all(tag, href=True))
 #             elements.extend(soup.find_all(tag, src=True))
-        
+
 #         for element in elements:
 #             link_href = element.get('href') or element.get('src')
 #             if link_href:
@@ -331,39 +389,40 @@ def fetch_all(url, parser="lxml", driver='request', # request or selenium
 #                     link_href = "http:" + link_href
 #                 elif not link_href.startswith(("http", "https")):
 #                     link_href = urljoin(base_url.geturl(), link_href)
-                
+
 #                 if all(exclusion not in link_href for exclusion in cond_ex):
 #                     links_href.append(link_href)
-        
+
 #         return list(set(links_href))  # Remove duplicates
+
 
 #     elif url.split('.')[-1] in ['pdf']:
 #         return url
 #     else:
 #         return None
-def find_links(url, driver='request', booster=False):
+def find_links(url, driver="request", booster=False):
     links_href, cond_ex = [], ["javascript:", "mailto:", "tel:", "fax:"]
     content_type, soup = fetch_all(url, driver=driver)
-    
-    if soup and content_type=='text/html':
+
+    if soup and content_type == "text/html":
         base_url = urlparse(url)
-        
+
         # Extract links from all tags with 'href' and 'src' attributes
         elements = soup.find_all(True, href=True) + soup.find_all(True, src=True)
-        
+
         for element in elements:
-            link_href = element.get('href') or element.get('src')
+            link_href = element.get("href") or element.get("src")
             if link_href:
                 if link_href.startswith("//"):
                     link_href = "http:" + link_href
                 elif not link_href.startswith(("http", "https")):
                     link_href = urljoin(base_url.geturl(), link_href)
-                
+
                 if all(exclusion not in link_href for exclusion in cond_ex):
                     links_href.append(link_href)
-        
+
         unique_links = list(set(links_href))  # Remove duplicates
-        
+
         if booster:
             for link in unique_links:
                 if link != url:  # Avoid infinite recursion
@@ -371,27 +430,27 @@ def find_links(url, driver='request', booster=False):
                     if sub_links:
                         links_href.extend(sub_links)
             links_href = list(set(links_href))  # Remove duplicates again
-        
+
         return links_href
 
-    elif url.split('.')[-1] in ['pdf']:
+    elif url.split(".")[-1] in ["pdf"]:
         return [url]
     else:
         return None
- 
+
 
 # To determine which links are related to target domains(e.g., pages) you are interested in
-def filter_links(links, contains="html",driver='requ', booster=False):
+def filter_links(links, contains="html", driver="requ", booster=False):
     filtered_links = []
     if isinstance(contains, str):
         contains = [contains]
-    if isinstance(links,str):
-        links=find_links(links,driver=driver,booster=booster)
+    if isinstance(links, str):
+        links = find_links(links, driver=driver, booster=booster)
     for link in links:
-        parsed_link = urlparse(link) 
-        condition = (all([i in link for i in contains])
-            and "javascript:" not in parsed_link
-        ) 
+        parsed_link = urlparse(link)
+        condition = (
+            all([i in link for i in contains]) and "javascript:" not in parsed_link
+        )
         if condition:
             filtered_links.append(link)
     return filtered_links
@@ -413,31 +472,33 @@ def find_domain(links):
         return None
 
 
-def pdf_detector(url, contains = None, dir_save = None, booster = False):
+def pdf_detector(url, contains=None, dir_save=None, booster=False):
     print("usage: pdf_detector(url, dir_save, booster=True")
+
     def fname_pdf_corr(fname):
-        if fname[-4:]!='.pdf':
-            fname = fname[:-4] + '.pdf'
+        if fname[-4:] != ".pdf":
+            fname = fname[:-4] + ".pdf"
         return fname
+
     if isinstance(contains, str):
         contains = [contains]
-    if isinstance(url,str):
-        if '.pdf' in url:
-            pdf_links=url
+    if isinstance(url, str):
+        if ".pdf" in url:
+            pdf_links = url
         else:
             if booster:
-                links_all=[]
-                if 'http' in url and url:
-                    [links_all.append(i) for i in find_links(url) if 'http' in i]
+                links_all = []
+                if "http" in url and url:
+                    [links_all.append(i) for i in find_links(url) if "http" in i]
                 print(links_all)
             else:
-                links_all=url
+                links_all = url
             if contains is not None:
                 pdf_links = filter_links(links=links_all, contains=[".pdf"] + contains)
             else:
                 pdf_links = filter_links(links=links_all, contains=[".pdf"])
-    elif isinstance(url,list):
-        links_all=url        
+    elif isinstance(url, list):
+        links_all = url
         if contains is not None:
             pdf_links = filter_links(links=links_all, contains=["pdf"] + contains)
         else:
@@ -452,7 +513,7 @@ def pdf_detector(url, contains = None, dir_save = None, booster = False):
     if pdf_links:
         pp(f"pdf detected{pdf_links}")
     else:
-        print('no pdf file')
+        print("no pdf file")
     if dir_save:
         print("... is trying to download to local")
         fnames = [pdf_link_.split("/")[-1] for pdf_link_ in pdf_links]
@@ -469,37 +530,68 @@ def pdf_detector(url, contains = None, dir_save = None, booster = False):
             else:
                 print("Failed to download PDF:", response.status_code)
             idx += 1
-        print(f'{len(fnames)} files are downloaded:\n{fnames}\n to local: \n{dir_save}')
+        print(f"{len(fnames)} files are downloaded:\n{fnames}\n to local: \n{dir_save}")
 
-def downloader(url, dir_save=dir_save, kind=['.pdf'], contains=None, rm_folder=False, booster=False,verbose=True):
+
+def downloader(
+    url,
+    dir_save=dir_save,
+    kind=[".pdf"],
+    contains=None,
+    rm_folder=False,
+    booster=False,
+    verbose=True,
+    timeout=30,
+    n_try=3,
+    timestamp=False,
+):
     if verbose:
-        print("usage: downloader(url, dir_save=None, kind=['.pdf','xls'], contains=None, booster=False)")
+        print(
+            "usage: downloader(url, dir_save=None, kind=['.pdf','xls'], contains=None, booster=False)"
+        )
+
     def fname_corrector(fname, ext):
         if not ext.startswith("."):
-            ext="."+ext
-        if not fname.endswith("ext"):#if not ext in fname:
-            fname = fname[:-len(ext)] + ext
+            ext = "." + ext
+        if not fname.endswith("ext"):  # if not ext in fname:
+            fname = fname[: -len(ext)] + ext
         return fname
+
     def check_and_modify_filename(directory, filename):
         base, ext = os.path.splitext(filename)
-        counter = 2
+        counter = 1
         new_filename = filename
         while os.path.exists(os.path.join(directory, new_filename)):
-            new_filename = f"{base}_{counter}{ext}"
+            if counter <= 9:
+                counter_ = "0" + str(counter)
+            else:
+                counter_ = str(counter)
+            new_filename = f"{base}_{counter_}{ext}"
             counter += 1
         return new_filename
-    if not isinstance(kind,list):
-        kind=[kind]
+
+    fpath_tmp, corrected_fname = None, None
+    if not isinstance(kind, list):
+        kind = [kind]
     if isinstance(url, list):
         for url_ in url:
-            downloader(url_, dir_save=dir_save, kind=kind, contains=contains, booster=booster,verbose=verbose)
+            downloader(
+                url_,
+                dir_save=dir_save,
+                kind=kind,
+                contains=contains,
+                booster=booster,
+                verbose=verbose,
+                timeout=timeout,
+                n_try=n_try,
+                timestamp=timestamp,
+            )
             # sleep(random.uniform(1, 3))
-    for i,k in enumerate(kind):
-        if not k.startswith('.'):
-            kind[i]='.'+kind[i] 
-    file_links_all=[]
+    for i, k in enumerate(kind):
+        if not k.startswith("."):
+            kind[i] = "." + kind[i]
+    file_links_all = []
     for kind_ in kind:
-        print(kind_)
         if isinstance(contains, str):
             contains = [contains]
         if isinstance(url, str):
@@ -508,16 +600,16 @@ def downloader(url, dir_save=dir_save, kind=['.pdf'], contains=None, rm_folder=F
             else:
                 if booster:
                     links_all = []
-                    if 'http' in url:
-                        links_all = find_links(url) 
+                    if "http" in url:
+                        links_all = find_links(url)
                 else:
                     links_all = url
                 if contains is not None:
                     file_links = filter_links(links_all, contains=contains + kind_)
                 else:
-                    file_links = links_all#filter_links(links_all, contains=kind_)
+                    file_links = links_all  # filter_links(links_all, contains=kind_)
         elif isinstance(url, list):
-            links_all = url        
+            links_all = url
             if contains is not None:
                 file_links = filter_links(links_all, contains=contains + kind_)
             else:
@@ -527,14 +619,14 @@ def downloader(url, dir_save=dir_save, kind=['.pdf'], contains=None, rm_folder=F
             if contains is not None:
                 file_links = filter_links(links_all, contains=contains + kind_)
             else:
-                file_links = filter_links(links_all, contains=kind_) 
+                file_links = filter_links(links_all, contains=kind_)
         if verbose:
             if file_links:
                 print("Files detected:")
                 pp(file_links)
             else:
-                file_links=[]
-                print('No files detected')
+                file_links = []
+                print("No files detected")
         file_links_all.extend(file_links)
     if dir_save:
         if rm_folder:
@@ -544,28 +636,63 @@ def downloader(url, dir_save=dir_save, kind=['.pdf'], contains=None, rm_folder=F
         fnames = [file_link.split("/")[-1] for file_link in file_links_all]
         for idx, file_link in enumerate(file_links_all):
             headers = {"User-Agent": user_agent()}
-            response = requests.get(file_link, headers=headers)
-            if response.status_code == 200:
-                ext = next((ftype for ftype in kind if ftype in file_link), None)
-                if ext:
-                    corrected_fname = fname_corrector(fnames[idx], ext)
-                    corrected_fname = check_and_modify_filename(dir_save, corrected_fname)
-                    with open(os.path.join(dir_save, corrected_fname), "wb") as file:
-                        file.write(response.content)
-                    if verbose:
-                        print(f"Done! {fnames[idx]}")
-                else:
-                    if verbose:
-                        print(f"Unknown file type for {file_link}")
-            else:
-                if verbose:
-                    print(f"Failed to download file: {response.status_code}")
-        print(f'\n{len(fnames)} files were downloaded:')
+            itry = 0  # Retry logic with exception handling
+            while itry < n_try:
+                try:
+                    # streaming to handle large files and reduce memory usage.
+                    response = requests.get(
+                        file_link, headers=headers, timeout=timeout, stream=True
+                    )
+                    if response.status_code == 200:
+                        ext = next(
+                            (ftype for ftype in kind if ftype in file_link), None
+                        )
+                        if ext:
+                            corrected_fname = fname_corrector(fnames[idx], ext)
+                            corrected_fname = check_and_modify_filename(
+                                dir_save, corrected_fname
+                            )
+                            if timestamp:
+                                corrected_fname = (
+                                    datetime.now().strftime("%y%m%d_%H%M%S_")
+                                    + corrected_fname
+                                )
+                            fpath_tmp = os.path.join(dir_save, corrected_fname)
+                            with open(fpath_tmp, "wb") as file:
+                                for chunk in response.iter_content(chunk_size=8192):
+                                    if chunk:  # Filter out keep-alive chunks
+                                        file.write(chunk)
+                            if verbose:
+                                print(f"Done! {fnames[idx]}")
+                        else:
+                            if verbose:
+                                print(f"Unknown file type for {file_link}")
+                        break  # Exit the retry loop if successful
+                    else:
+                        if verbose:
+                            print(
+                                f"Failed to download file: HTTP status code {response.status_code}"
+                            )
+                except (ChunkedEncodingError, ConnectionError) as e:
+                    print(f"Attempt {itry+1} failed: {e}. Retrying in a few seconds...")
+                    # time.sleep(random.uniform(0, 2))  # Random sleep to mitigate server issues
+                    if fpath_tmp and os.path.exists(fpath_tmp):
+                        os.remove(fpath_tmp)
+                    itry += 1
+
+            if itry == n_try:
+                print(f"Failed to download {file_link} after {n_try} attempts.")
+
+        print(f"\n{len(fnames)} files were downloaded:")
         if verbose:
-            pp(fnames)
+            if corrected_fname:
+                pp(corrected_fname)
+            else:
+                pp(fnames)
             print(f"\n\nsaved @:\n{dir_save}")
-        
-def find_img(url, driver='request',dir_save="images", rm_folder=False, verbose=True):
+
+
+def find_img(url, driver="request", dir_save="images", rm_folder=False, verbose=True):
     """
     Save images referenced in HTML content locally.
     Args:
@@ -578,8 +705,7 @@ def find_img(url, driver='request',dir_save="images", rm_folder=False, verbose=T
     """
     if rm_folder:
         ips.rm_folder(dir_save)
-    content_type, content = fetch_all(url,driver=driver)
-    print(content_type)
+    content_type, content = fetch_all(url, driver=driver)
     if "html" in content_type.lower():
         # Create the directory if it doesn't exist
         os.makedirs(dir_save, exist_ok=True)
@@ -590,7 +716,7 @@ def find_img(url, driver='request',dir_save="images", rm_folder=False, verbose=T
         # Extracting images
         images = content.find_all("img", src=True)
         if not images:
-            content_type, content = fetch_all(url,driver='selenium')
+            content_type, content = fetch_all(url, driver="selenium")
             images = content.find_all("img", src=True)
         for i, image in enumerate(images):
             try:
@@ -622,7 +748,9 @@ def find_img(url, driver='request',dir_save="images", rm_folder=False, verbose=T
                     parsed_url = urlparse(absolute_image_url)
                     image_extension = os.path.splitext(parsed_url.path)[1]
                     # Download the image
-                    image_response = requests.get(absolute_image_url,proxies=proxies_glob)
+                    image_response = requests.get(
+                        absolute_image_url, proxies=proxies_glob
+                    )
                     # Save the image to a file
                     image_filename = os.path.join(
                         dir_save, f"image_{i}{image_extension}"
@@ -635,18 +763,21 @@ def find_img(url, driver='request',dir_save="images", rm_folder=False, verbose=T
                 print(f"Failed to process image {image_url}: {e}")
         print(f"images were saved at\n{dir_save}")
         if verbose:
-            display_thumbnail_figure(flist(dir_save,filter='img'),dpi=100)
+            display_thumbnail_figure(flist(dir_save, kind="img"), dpi=100)
     return content
+
 
 def svg_to_png(svg_file):
     with WandImage(filename=svg_file, resolution=300) as img:
-        img.format = 'png'
+        img.format = "png"
         png_image = img.make_blob()
     return Image.open(io.BytesIO(png_image))
 
-def display_thumbnail_figure(dir_img_list,figsize=(10,10),dpi=100):
+
+def display_thumbnail_figure(dir_img_list, figsize=(10, 10), dpi=100):
     import matplotlib.pyplot as plt
     from PIL import Image
+
     """
     Display a thumbnail figure of all images in the specified directory.
     Args:
@@ -656,13 +787,13 @@ def display_thumbnail_figure(dir_img_list,figsize=(10,10),dpi=100):
     if num_images == 0:
         print("No images found to display.")
         return
-    grid_size = int(num_images ** 0.5) + 1
-    fig, axs = plt.subplots(grid_size, grid_size, figsize=figsize,dpi=dpi)
+    grid_size = int(num_images**0.5) + 1
+    fig, axs = plt.subplots(grid_size, grid_size, figsize=figsize, dpi=dpi)
     for ax, image_file in zip(axs.flatten(), dir_img_list):
         try:
             img = Image.open(image_file)
             ax.imshow(img)
-            ax.axis('off')  # Hide axes
+            ax.axis("off")  # Hide axes
         except:
             continue
     try:
@@ -671,6 +802,7 @@ def display_thumbnail_figure(dir_img_list,figsize=(10,10),dpi=100):
         plt.show()
     except:
         pass
+
 
 def content_div_class(content, div="div", div_class="highlight"):
     texts = [div.text for div in content.find_all(div, class_=div_class)]
@@ -699,7 +831,7 @@ def fetch_selenium(
     javascript=True,  # Add JavaScript option
     disable_images=False,  # Add option to disable images
     iframe_name=None,  # Add option to handle iframe
-    **kwargs
+    **kwargs,
 ):
     chrome_options = Options()
     chrome_options.add_argument("--headless")
@@ -707,7 +839,7 @@ def fetch_selenium(
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument(f"user-agent={user_agent()}")
     if proxy:
-        chrome_options.add_argument(f'--proxy-server={proxy}')
+        chrome_options.add_argument(f"--proxy-server={proxy}")
     if disable_images:
         prefs = {"profile.managed_default_content_settings.images": 2}
         chrome_options.add_experimental_option("prefs", prefs)
@@ -716,9 +848,11 @@ def fetch_selenium(
     for attempt in range(retry):
         try:
             driver = webdriver.Chrome(service=service, options=chrome_options)
-            
+
             if not javascript:
-                driver.execute_cdp_cmd("Emulation.setScriptExecutionDisabled", {"value": True})
+                driver.execute_cdp_cmd(
+                    "Emulation.setScriptExecutionDisabled", {"value": True}
+                )
 
             if login_url:
                 driver.get(login_url)
@@ -733,7 +867,7 @@ def fetch_selenium(
                 ).click()
 
             driver.get(url)
-            
+
             if iframe_name:
                 iframe = WebDriverWait(driver, timeout).until(
                     EC.presence_of_element_located((By.NAME, iframe_name))
@@ -747,7 +881,9 @@ def fetch_selenium(
             driver.quit()
 
             content = BeautifulSoup(page_source, "html.parser")
-            texts = extract_text_from_content(content, where=where, what=what, extend=extend, **kwargs)
+            texts = extract_text_from_content(
+                content, where=where, what=what, extend=extend, **kwargs
+            )
             return texts
         except Exception as e:
             # logger.error(f"Attempt {attempt + 1} failed with error ")
@@ -761,33 +897,68 @@ def fetch_selenium(
     return []
 
 
-def fetch(url, where="div", driver='request',what=None, extend=True, booster=False,retry=2,verbose=False, output="text", **kws):
-    print(f"output is {output}")
-    if 'xt' in output.lower():
+def fetch(
+    url,
+    where="div",
+    driver="request",
+    what=None,
+    extend=True,
+    booster=False,
+    retry=2,
+    verbose=False,
+    output="text",
+    **kws,
+):
+    if "xt" in output.lower():
         for attempt in range(retry):
-            if verbose and attempt==0:
+            if verbose and attempt == 0:
                 xample = 'fetch(url,where="div",what=None,extend=True,by=By.TAG_NAME,timeout=10,retry=3,login_url=None,username=None,password=None,username_field="username",password_field="password",submit_field="submit",username_by=By.NAME,password_by=By.NAME,submit_by=By.NAME)'
                 print(xample)
-            content_type, content = fetch_all(url, parser="html.parser",driver=driver)
-            texts=extract_text_from_content(content,content_type=content_type,where=where,what=what,extend=extend, **kws)
-            if isinstance(texts, pd.core.frame.DataFrame): 
+            if isinstance(url, str):
+                content_type, content = fetch_all(
+                    url, parser="html.parser", driver=driver
+                )
+            else:
+                content_type, content = "text/html", url
+            texts = extract_text_from_content(
+                content,
+                content_type=content_type,
+                where=where,
+                what=what,
+                extend=extend,
+                **kws,
+            )
+            if isinstance(texts, pd.core.frame.DataFrame):
                 if not texts.empty:
                     break
-            else: 
+            else:
                 if texts:
                     break
                 sleep(random.uniform(0.5, 1.5))
-        if isinstance(texts,pd.core.frame.DataFrame):
-            condition_=[texts.empty, booster]
+        if isinstance(texts, pd.core.frame.DataFrame):
+            condition_ = [texts.empty, booster]
         else:
-            condition_=[not texts, booster]
+            condition_ = [not texts, booster]
         if any(condition_):
             print("trying to use 'fetcher2'...")
-            texts = fetch_selenium(url=url, where=where, what=what, extend=extend, **kws)
+            texts = fetch_selenium(
+                url=url, where=where, what=what, extend=extend, **kws
+            )
         if texts:
             return texts
         else:
-            return fetch(url, where=where, driver=driver,what=what, extend=extend, booster=booster,retry=retry,verbose=verbose, output="soup", **kws)
+            return fetch(
+                url,
+                where=where,
+                driver=driver,
+                what=what,
+                extend=extend,
+                booster=booster,
+                retry=retry,
+                verbose=verbose,
+                output="soup",
+                **kws,
+            )
     elif "url" in output.lower():
         base_url = urlparse(url)
         if verbose:
@@ -795,20 +966,17 @@ def fetch(url, where="div", driver='request',what=None, extend=True, booster=Fal
         return base_url.geturl()
     else:
         try:
-            content_type, content = fetch_all(url, parser="html.parser",driver=driver)
+            content_type, content = fetch_all(url, parser="html.parser", driver=driver)
             search_kwargs = {**kws}
-            print(search_kwargs)
-            if 'class_' in search_kwargs:
-                search_kwargs["class"]=search_kwargs["class_"]
-                del search_kwargs['class_']
+            if "class_" in search_kwargs:
+                search_kwargs["class"] = search_kwargs["class_"]
+                del search_kwargs["class_"]
             if what:
                 search_kwargs["class"] = what
-            if 'attrs' in kws:
+            if "attrs" in kws:
                 result_set = content.find_all(where, **search_kwargs)
-                print(f"attrs =>{search_kwargs}")
             else:
                 result_set = content.find_all(where, attrs=dict(**search_kwargs))
-                print(f"{search_kwargs}")
             return result_set
         except:
             print("got nothing")
@@ -817,26 +985,27 @@ def fetch(url, where="div", driver='request',what=None, extend=True, booster=Fal
 
 def extract_from_content(content, where="div", what=None):
     if what is None:
-        result_set = content.find_all(where,recursive=True)
+        result_set = content.find_all(where, recursive=True)
         texts_ = " ".join(tag.get_text() + "\n" for tag in result_set)
         texts = [tx for tx in texts_.split("\n") if tx]
     else:
         texts_ = " ".join(
-            div.get_text() + "\n" for div in content.find_all(where, class_=what,recursive=True)
+            div.get_text() + "\n"
+            for div in content.find_all(where, class_=what, recursive=True)
         )
         texts = [tx for tx in texts_.split("\n") if tx]
     return texts
 
 
-def find_forms(url, driver='requ'):
-    content_type, content = fetch_all(url,driver=driver)
+def find_forms(url, driver="requ"):
+    content_type, content = fetch_all(url, driver=driver)
     df = pd.DataFrame()
     # Extracting forms and inputs
-    forms = content.find_all("form",recursive=True)
+    forms = content.find_all("form", recursive=True)
     form_data = []
     for form in forms:
         if form:
-            form_inputs = form.find_all("input",recursive=True)
+            form_inputs = form.find_all("input", recursive=True)
             input_data = {}
             for input_tag in form_inputs:
                 input_type = input_tag.get("type")
@@ -855,24 +1024,30 @@ def clean_string(value):
         return value
 
 
-def find_all(url, dir_save=None, driver='req'):
-    content_type, content = fetch_all(url,driver=driver)
+def find_all(url, dir_save=None, driver="req"):
+    content_type, content = fetch_all(url, driver=driver)
     paragraphs_text = extract_from_content(content, where="p")
     # Extracting specific elements by class
     specific_elements_text = [
-        element.text for element in content.find_all(class_="specific-class",recursive=True) if element
+        element.text
+        for element in content.find_all(class_="specific-class", recursive=True)
+        if element
     ]
     # Extracting links (anchor tags)
     links_href = find_links(url)
     links_href = filter_links(links_href)
 
     # Extracting images
-    images_src = [image["src"] for image in content.find_all("img", src=True,recursive=True) if image]
+    images_src = [
+        image["src"]
+        for image in content.find_all("img", src=True, recursive=True)
+        if image
+    ]
 
     # Extracting headings (h1, h2, h3, etc.)
     headings = [f"h{i}" for i in range(1, 7)]
     headings_text = {
-        heading: [tag.text for tag in content.find_all(heading,recursive=True)]
+        heading: [tag.text for tag in content.find_all(heading, recursive=True)]
         for heading in headings
         if heading
     }
@@ -880,15 +1055,15 @@ def find_all(url, dir_save=None, driver='req'):
     # Extracting lists (ul, ol, li)
     list_items_text = [
         item.text
-        for list_ in content.find_all(["ul", "ol"],recursive=True)
-        for item in list_.find_all("li",recursive=True)
+        for list_ in content.find_all(["ul", "ol"], recursive=True)
+        for item in list_.find_all("li", recursive=True)
         if item
     ]
 
     # Extracting tables (table, tr, td)
     table_cells_text = [
         cell.text
-        for table in content.find_all("table",recursive=True)
+        for table in content.find_all("table", recursive=True)
         for row in table.find_all("tr")
         for cell in row.find_all("td")
         if cell
@@ -897,10 +1072,12 @@ def find_all(url, dir_save=None, driver='req'):
     # Extracting other elements
     divs_content = extract_from_content(content, where="div")
     headers_footer_content = [
-        tag.text for tag in content.find_all(["header", "footer"],recursive=True) if tag
+        tag.text
+        for tag in content.find_all(["header", "footer"], recursive=True)
+        if tag
     ]
     meta_tags_content = [
-        (tag.name, tag.attrs) for tag in content.find_all("meta",recursive=True) if tag
+        (tag.name, tag.attrs) for tag in content.find_all("meta", recursive=True) if tag
     ]
     spans_content = extract_from_content(content, where="span")
     bold_text_content = extract_from_content(content, where="b")
@@ -960,15 +1137,21 @@ def find_all(url, dir_save=None, driver='req'):
     script_texts = content_div_class(content, div="div", div_class="highlight")
     lists_to_fill.append(script_texts)
 
-    audio_src = [audio["src"] for audio in content.find_all("audio", src=True,recursive=True)]
-    video_src = [video["src"] for video in content.find_all("video", src=True,recursive=True)]
-    iframe_src = [iframe["src"] for iframe in content.find_all("iframe", src=True,recursive=True)]
+    audio_src = [
+        audio["src"] for audio in content.find_all("audio", src=True, recursive=True)
+    ]
+    video_src = [
+        video["src"] for video in content.find_all("video", src=True, recursive=True)
+    ]
+    iframe_src = [
+        iframe["src"] for iframe in content.find_all("iframe", src=True, recursive=True)
+    ]
     lists_to_fill.extend([audio_src, video_src, iframe_src])
 
     rss_links = [
         link["href"]
         for link in content.find_all(
-            "link", type=["application/rss+xml", "application/atom+xml"],recursive=True
+            "link", type=["application/rss+xml", "application/atom+xml"], recursive=True
         )
     ]
     lists_to_fill.append(rss_links)
@@ -1037,77 +1220,95 @@ def find_all(url, dir_save=None, driver='req'):
     return df
 
 
-def flist(fpath, filter="all"):
-    all_files = [os.path.join(fpath, f) for f in os.listdir(fpath) if os.path.isfile(os.path.join(fpath, f))]
-    if isinstance(filter, str):
-        filter=[filter]
-    if isinstance(filter, list):
-        filt_files=[]
-        for filter_ in filter:
-            filt_files.extend(flist(fpath, filter_))
-        return filt_files
-    else:
-        if 'all' in filter.lower():
-            return all_files
-        else:
-            filt_files = [f for f in all_files if istype(f, filter)]
-        return filt_files
+def flist(fpath, kind="all"):
+    all_files = [
+        os.path.join(fpath, f)
+        for f in os.listdir(fpath)
+        if os.path.isfile(os.path.join(fpath, f))
+    ]
+    if kind == "all" or "all" in kind:
+        return all_files
+    if isinstance(kind, str):
+        kind = [kind]
+    filt_files = []
+    for f in all_files:
+        for kind_ in kind:
+            if isa(f, kind_):
+                filt_files.append(f)
+                break
+    return filt_files
 
-def istype(fpath, filter='img'):
+
+def isa(fpath, kind="img"):
     """
-    Filters file paths based on the specified filter.
+    kinds file paths based on the specified kind.
     Args:
         fpath (str): Path to the file.
-        filter (str): filter of file to filter. Default is 'img' for images. Other options include 'doc' for documents,
+        kind (str): kind of file to kind. Default is 'img' for images. Other options include 'doc' for documents,
                     'zip' for ZIP archives, and 'other' for other types of files.
     Returns:
-        bool: True if the file matches the filter, False otherwise.
+        bool: True if the file matches the kind, False otherwise.
     """
-    if 'img' in filter.lower():
+    if "img" in kind.lower():
         return is_image(fpath)
-    elif 'doc' in filter.lower():
+    elif "doc" in kind.lower():
         return is_document(fpath)
-    elif 'zip' in filter.lower():
+    elif "zip" in kind.lower():
         return is_zip(fpath)
     else:
         return False
 
+
 def is_image(fpath):
     mime_type, _ = mimetypes.guess_type(fpath)
-    if mime_type and mime_type.startswith('image'):
+    if mime_type and mime_type.startswith("image"):
         return True
     else:
         return False
 
+
 def is_document(fpath):
     mime_type, _ = mimetypes.guess_type(fpath)
     if mime_type and (
-        mime_type.startswith('text/') or
-        mime_type == 'application/pdf' or
-        mime_type == 'application/msword' or
-        mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or
-        mime_type == 'application/vnd.ms-excel' or
-        mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or
-        mime_type == 'application/vnd.ms-powerpoint' or
-        mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        mime_type.startswith("text/")
+        or mime_type == "application/pdf"
+        or mime_type == "application/msword"
+        or mime_type
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        or mime_type == "application/vnd.ms-excel"
+        or mime_type
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        or mime_type == "application/vnd.ms-powerpoint"
+        or mime_type
+        == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     ):
         return True
     else:
         return False
 
+
 def is_zip(fpath):
     mime_type, _ = mimetypes.guess_type(fpath)
-    if mime_type == 'application/zip':
+    if mime_type == "application/zip":
         return True
     else:
         return False
 
-def search(query, limit=5, kind='text', output='df',verbose=False,download=False, dir_save=dir_save):
 
-    if 'te' in kind.lower():
+def search(
+    query,
+    limit=5,
+    kind="text",
+    output="df",
+    verbose=False,
+    download=False,
+    dir_save=dir_save,
+):
+
+    if "te" in kind.lower():
         results = DDGS().text(query, max_results=limit)
-        res=pd.DataFrame(results)
-        res.rename(columns={"href":"links"},inplace=True)
+        res = pd.DataFrame(results)
+        res.rename(columns={"href": "links"}, inplace=True)
     if verbose:
         print(f'searching "{query}": got the results below\n{res}')
     if download:
@@ -1118,16 +1319,18 @@ def search(query, limit=5, kind='text', output='df',verbose=False,download=False
                 print(f"failed link")
     return res
 
+
 def echo(query, model="gpt", verbose=True, log=True, dir_save=dir_save):
     def is_in_any(str_candi_short, str_full, ignore_case=True):
         if isinstance(str_candi_short, str):
-            str_candi_short=[str_candi_short]
-        res_bool=[]
+            str_candi_short = [str_candi_short]
+        res_bool = []
         if ignore_case:
-            [res_bool.append(i in str_full.lower())  for i in str_candi_short ]
+            [res_bool.append(i in str_full.lower()) for i in str_candi_short]
         else:
-            [res_bool.append(i in str_full)  for i in str_candi_short ]
+            [res_bool.append(i in str_full) for i in str_candi_short]
         return any(res_bool)
+
     def valid_mod_name(str_fly):
         if is_in_any(str_fly, "claude-3-haiku"):
             return "claude-3-haiku"
@@ -1138,27 +1341,32 @@ def echo(query, model="gpt", verbose=True, log=True, dir_save=dir_save):
         elif is_in_any(str_fly, "mixtral-8x7b"):
             return "mixtral-8x7b"
         else:
-            print(f"not support your model{model}, supported models: 'claude','gpt(default)', 'llama','mixtral'")
-            return "gpt-3.5" # default model
+            print(
+                f"not support your model{model}, supported models: 'claude','gpt(default)', 'llama','mixtral'"
+            )
+            return "gpt-3.5"  # default model
+
     model_valid = valid_mod_name(model)
-    res=DDGS().chat(query, model=model_valid)
+    res = DDGS().chat(query, model=model_valid)
     if verbose:
         pp(res)
     if log:
-        dt_str=datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H:%M:%S')
+        dt_str = datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d_%H:%M:%S")
         res_ = f"###{dt_str}\n\n>{res}\n"
         os.makedirs(dir_save, exist_ok=True)
         fpath = os.path.join(dir_save, f"log_ai.md")
-        ips.fupdate(fpath=fpath,content=res_)
+        ips.fupdate(fpath=fpath, content=res_)
         print(f"log file:{fpath}")
     return res
 
+
 def chat(*args, **kwargs):
     if len(args) == 1 and isinstance(args[0], str):
-        kwargs['query'] = args[0]
+        kwargs["query"] = args[0]
     return echo(**kwargs)
+
 
 def ai(*args, **kwargs):
     if len(args) == 1 and isinstance(args[0], str):
-        kwargs['query'] = args[0]
+        kwargs["query"] = args[0]
     return echo(**kwargs)

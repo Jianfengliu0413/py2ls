@@ -139,7 +139,7 @@ def filter_bandpass(data=None, ord=4, freq_range=[11, 16], fs=1000):
 def moving_average(data, window_size):
     return convolve1d(data, np.ones(window_size) / window_size)
 
-def detect_cross(data, thr=0):
+def detect_cross(data, thr=0, match=True,full_cycle=False):
     if isinstance(data, list):
         data = np.array(data)
     if data.ndim == 1:
@@ -148,20 +148,31 @@ def detect_cross(data, thr=0):
         data = data.T
     else:
         raise ValueError("Input data must have two dimensions.")
-
-    thr_cross = np.sign(data[:, np.newaxis] - thr)
-    falling_before = np.where((thr_cross[:-1] == 1) & (thr_cross[1:] == -1))[0] #+ 1
-    rising_before = np.where((thr_cross[:-1] == -1) & (thr_cross[1:] == 1))[0]
-    falling_before = falling_before.tolist()
-    rising_before = rising_before.tolist()
-    if rising_before and falling_before:
-        if rising_before[0] < falling_before[0]:
-            if len(rising_before) > len(falling_before):
-                rising_before.pop(0)
-        else:
-            falling_before.pop(0)
-            if len(rising_before) > len(falling_before):
-                rising_before.pop(0)
+    if full_cycle:
+        thr_cross = np.sign(data[:, np.newaxis] - thr)
+        falling_before = np.where((thr_cross[:-1] == 1) & (thr_cross[1:] == -1))[0] #+ 1
+        rising_before = np.where((thr_cross[:-1] == -1) & (thr_cross[1:] == 1))[0]
+        falling_before = falling_before.tolist()
+        rising_before = rising_before.tolist()
+        if rising_before and falling_before:
+            if rising_before[0] < falling_before[0]:
+                if len(rising_before) > len(falling_before):
+                    rising_before.pop(0)
+            else:
+                falling_before.pop(0)
+                if len(rising_before) > len(falling_before):
+                    rising_before.pop(0)
+        return rising_before, falling_before
+    else:
+        signal_shifted = data - thr
+        signal_sign = np.sign(signal_shifted)
+        sign_diff = np.diff(signal_sign)
+        rising_before, falling_before=np.where(sign_diff > 0)[0],np.where(sign_diff < 0)[0]
+        if match:
+            # make sure they are matched
+            min_length = min(len(rising_before), len(falling_before))
+            rising_before, falling_before=rising_before[:min_length], falling_before[:min_length]
+        return rising_before, falling_before
     ## debug
     # a = np.sin(np.arange(0, 10 * np.pi, np.pi / 100))
 
@@ -188,8 +199,6 @@ def detect_cross(data, thr=0):
     #         lw=5 - i,
     #     )
     # plt.gca().axhline(thres)
-    return rising_before, falling_before
-
 def find_repeats(data, N, nGap=None):
     """
     Find the beginning and end points of repeated occurrences in a dataset.
