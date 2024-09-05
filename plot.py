@@ -9,7 +9,8 @@ import matplotlib.ticker as tck
 from cycler import cycler
 import logging
 import os
-from .ips import fsave, fload, mkdir
+
+from .ips import fsave, fload, mkdir, listdir, figsave
 from .stats import *
 
 # Suppress INFO messages from fontTools
@@ -28,8 +29,25 @@ def catplot(data, *args, **kwargs):
     """
 
     def plot_bars(data, data_m, opt_b, xloc, ax, label=None):
+        if "l" in opt_b["loc"]:
+            xloc_s = xloc - opt_b["x_dist"]
+        elif "r" in opt_b["loc"]:
+            xloc_s = xloc + opt_b["x_dist"]
+        elif "i" in opt_b["loc"]:
+            xloc_s = xloc
+            xloc_s[:, 0] += opt_b["x_dist"]
+            xloc_s[:, -1] -= opt_b["x_dist"]
+        elif "o" in opt_b["loc"]:
+            xloc_s = xloc
+            xloc_s[:, 0] -= opt_b["x_dist"]
+            xloc_s[:, -1] += opt_b["x_dist"]
+        elif "c" in opt_b["loc"] or "m" in opt_b["loc"]:
+            xloc_s = xloc
+        else:
+            xloc_s = xloc
+
         bar_positions = get_positions(
-            xloc, opt_b["loc"], opt_b["x_width"], data.shape[0]
+            xloc_s, opt_b["loc"], opt_b["x_width"], data.shape[0]
         )
         bar_positions = np.nanmean(bar_positions, axis=0)
         for i, (x, y) in enumerate(zip(bar_positions, data_m)):
@@ -60,12 +78,22 @@ def catplot(data, *args, **kwargs):
 
     def plot_errors(data, data_m, opt_e, xloc, ax, label=None):
         error_positions = get_positions(
-            xloc, opt_e["loc"], opt_e["x_width"], data.shape[0]
+            xloc, opt_e["loc"], opt_e["x_dist"], data.shape[0]
         )
         error_positions = np.nanmean(error_positions, axis=0)
         errors = np.nanstd(data, axis=0, ddof=1)
         if opt_e["error"] == "sem":
             errors /= np.sqrt(np.sum(~np.isnan(data), axis=0))
+        if opt_e["LineStyle"] != "none":
+            # draw lines
+            ax.plot(
+                error_positions,
+                data_m,
+                color=opt_e["LineColor"],
+                linestyle=opt_e["LineStyle"],
+                linewidth=opt_e["LineWidth"],
+                alpha=opt_e["LineAlpha"],
+            )
 
         if not isinstance(opt_e["FaceColor"], list):
             opt_e["FaceColor"] = [opt_e["FaceColor"]]
@@ -144,8 +172,25 @@ def catplot(data, *args, **kwargs):
                     )
 
     def plot_scatter(data, opt_s, xloc, ax, label=None):
+        if "l" in opt_s["loc"]:
+            xloc_s = xloc - opt_s["x_dist"]
+        elif "r" in opt_s["loc"]:
+            xloc_s = xloc + opt_s["x_dist"]
+        elif "i" in opt_s["loc"]:
+            xloc_s = xloc
+            xloc_s[:, 0] += opt_s["x_dist"]
+            xloc_s[:, -1] -= opt_s["x_dist"]
+        elif "o" in opt_s["loc"]:
+            xloc_s = xloc
+            xloc_s[:, 0] -= opt_s["x_dist"]
+            xloc_s[:, -1] += opt_s["x_dist"]
+        elif "c" in opt_s["loc"] or "m" in opt_s["loc"]:
+            xloc_s = xloc
+        else:
+            xloc_s = xloc
+
         scatter_positions = get_positions(
-            xloc, opt_s["loc"], opt_s["x_width"], data.shape[0]
+            xloc_s, opt_s["loc"], opt_s["x_width"], data.shape[0]
         )
         for i, (x, y) in enumerate(zip(scatter_positions.T, data.T)):
             color = to_rgba(opt_s["FaceColor"][i % len(opt_s["FaceColor"])])
@@ -177,17 +222,17 @@ def catplot(data, *args, **kwargs):
 
     def plot_boxplot(data, bx_opt, xloc, ax, label=None):
         if "l" in bx_opt["loc"]:
-            X_bx = xloc - bx_opt["x_width"]
+            X_bx = xloc - bx_opt["x_dist"]
         elif "r" in bx_opt["loc"]:
-            X_bx = xloc + bx_opt["x_width"]
+            X_bx = xloc + bx_opt["x_dist"]
         elif "i" in bx_opt["loc"]:
             X_bx = xloc
-            X_bx[:, 0] += bx_opt["x_width"]
-            X_bx[:, -1] -= bx_opt["x_width"]
+            X_bx[:, 0] += bx_opt["x_dist"]
+            X_bx[:, -1] -= bx_opt["x_dist"]
         elif "o" in bx_opt["loc"]:
             X_bx = xloc
-            X_bx[:, 0] -= bx_opt["x_width"]
-            X_bx[:, -1] += bx_opt["x_width"]
+            X_bx[:, 0] -= bx_opt["x_dist"]
+            X_bx[:, -1] += bx_opt["x_dist"]
         elif "c" in bx_opt["loc"] or "m" in bx_opt["loc"]:
             X_bx = xloc
         else:
@@ -196,7 +241,8 @@ def catplot(data, *args, **kwargs):
         boxprops = dict(color=bx_opt["EdgeColor"], linewidth=bx_opt["BoxLineWidth"])
         flierprops = dict(
             marker=bx_opt["OutlierMarker"],
-            markerfacecolor=bx_opt["OutlierColor"],
+            markerfacecolor=bx_opt["OutlierFaceColor"],
+            markeredgecolor=bx_opt["OutlierEdgeColor"],
             markersize=bx_opt["OutlierSize"],
         )
         whiskerprops = dict(
@@ -258,20 +304,149 @@ def catplot(data, *args, **kwargs):
         if bx_opt["MedianLineTop"]:
             ax.set_children(ax.get_children()[::-1])  # move median line forward
 
-    def plot_violin(data, opt_v, xloc, ax, label=None):
+    def plot_violin(data, opt_v, xloc, ax, label=None, vertical=True):
         violin_positions = get_positions(
-            xloc, opt_v["loc"], opt_v["x_width"], data.shape[0]
+            xloc, opt_v["loc"], opt_v["x_dist"], data.shape[0]
         )
         violin_positions = np.nanmean(violin_positions, axis=0)
         for i, (x, ys) in enumerate(zip(violin_positions, data.T)):
             ys = ys[~np.isnan(ys)]
-            kde = gaussian_kde(ys, bw_method=opt_v["BandWidth"])
-            min_val, max_val = ys.min(), ys.max()
-            y_vals = np.linspace(min_val, max_val, opt_v["NumPoints"])
-            kde_vals = kde(y_vals)
-            kde_vals = kde_vals / kde_vals.max() * opt_v["x_width"]
-            if label is not None and i < len(label):
-                if len(ys) > 1:
+            if np.all(ys == ys[0]):  # Check if data is constant
+                print(
+                    "Data is constant; KDE cannot be applied. Plotting a flat line instead."
+                )
+                if vertical:
+                    ax.plot(
+                        [x - opt_v["x_width"] / 2, x + opt_v["x_width"] / 2],
+                        [ys[0], ys[0]],
+                        color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
+                        lw=2,
+                        label=label[i] if label else None,
+                    )
+                else:
+                    ax.plot(
+                        [ys[0], ys[0]],
+                        [x - opt_v["x_width"] / 2, x + opt_v["x_width"] / 2],
+                        color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
+                        lw=2,
+                        label=label[i] if label else None,
+                    )
+            else:
+                kde = gaussian_kde(ys, bw_method=opt_v["BandWidth"])
+                min_val, max_val = ys.min(), ys.max()
+                y_vals = np.linspace(min_val, max_val, opt_v["NumPoints"])
+                kde_vals = kde(y_vals)
+                kde_vals = kde_vals / kde_vals.max() * opt_v["x_width"]
+                if label is not None and i < len(label):
+                    if len(ys) > 1:
+                        if "r" in opt_v["loc"].lower():
+                            ax.fill_betweenx(
+                                y_vals,
+                                x,
+                                x + kde_vals,
+                                color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
+                                alpha=opt_v["FaceAlpha"],
+                                edgecolor=opt_v["EdgeColor"],
+                                label=label[i],
+                                lw=opt_v["LineWidth"],
+                                hatch=(
+                                    opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                    if opt_v["hatch"] is not None
+                                    else None
+                                ),
+                            )
+                        elif (
+                            "l" in opt_v["loc"].lower()
+                            and not "f" in opt_v["loc"].lower()
+                        ):
+                            ax.fill_betweenx(
+                                y_vals,
+                                x - kde_vals,
+                                x,
+                                color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
+                                alpha=opt_v["FaceAlpha"],
+                                edgecolor=opt_v["EdgeColor"],
+                                label=label[i],
+                                lw=opt_v["LineWidth"],
+                                hatch=(
+                                    opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                    if opt_v["hatch"] is not None
+                                    else None
+                                ),
+                            )
+                        elif (
+                            "o" in opt_v["loc"].lower()
+                            or "both" in opt_v["loc"].lower()
+                        ):
+                            ax.fill_betweenx(
+                                y_vals,
+                                x - kde_vals,
+                                x + kde_vals,
+                                color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
+                                alpha=opt_v["FaceAlpha"],
+                                edgecolor=opt_v["EdgeColor"],
+                                label=label[i],
+                                lw=opt_v["LineWidth"],
+                                hatch=(
+                                    opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                    if opt_v["hatch"] is not None
+                                    else None
+                                ),
+                            )
+                        elif "i" in opt_v["loc"].lower():
+                            if i % 2 == 1:  # odd number
+                                ax.fill_betweenx(
+                                    y_vals,
+                                    x - kde_vals,
+                                    x,
+                                    color=opt_v["FaceColor"][
+                                        i % len(opt_v["FaceColor"])
+                                    ],
+                                    alpha=opt_v["FaceAlpha"],
+                                    edgecolor=opt_v["EdgeColor"],
+                                    label=label[i],
+                                    lw=opt_v["LineWidth"],
+                                    hatch=(
+                                        opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                        if opt_v["hatch"] is not None
+                                        else None
+                                    ),
+                                )
+                            else:
+                                ax.fill_betweenx(
+                                    y_vals,
+                                    x,
+                                    x + kde_vals,
+                                    color=opt_v["FaceColor"][
+                                        i % len(opt_v["FaceColor"])
+                                    ],
+                                    alpha=opt_v["FaceAlpha"],
+                                    edgecolor=opt_v["EdgeColor"],
+                                    label=label[i],
+                                    lw=opt_v["LineWidth"],
+                                    hatch=(
+                                        opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                        if opt_v["hatch"] is not None
+                                        else None
+                                    ),
+                                )
+                        elif "f" in opt_v["loc"].lower():
+                            ax.fill_betweenx(
+                                y_vals,
+                                x - kde_vals,
+                                x + kde_vals,
+                                color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
+                                alpha=opt_v["FaceAlpha"],
+                                edgecolor=opt_v["EdgeColor"],
+                                label=label[i],
+                                lw=opt_v["LineWidth"],
+                                hatch=(
+                                    opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                    if opt_v["hatch"] is not None
+                                    else None
+                                ),
+                            )
+                else:
                     if "r" in opt_v["loc"].lower():
                         ax.fill_betweenx(
                             y_vals,
@@ -280,7 +455,12 @@ def catplot(data, *args, **kwargs):
                             color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
                             alpha=opt_v["FaceAlpha"],
                             edgecolor=opt_v["EdgeColor"],
-                            label=label[i],
+                            lw=opt_v["LineWidth"],
+                            hatch=(
+                                opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                if opt_v["hatch"] is not None
+                                else None
+                            ),
                         )
                     elif (
                         "l" in opt_v["loc"].lower() and not "f" in opt_v["loc"].lower()
@@ -292,7 +472,12 @@ def catplot(data, *args, **kwargs):
                             color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
                             alpha=opt_v["FaceAlpha"],
                             edgecolor=opt_v["EdgeColor"],
-                            label=label[i],
+                            lw=opt_v["LineWidth"],
+                            hatch=(
+                                opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                if opt_v["hatch"] is not None
+                                else None
+                            ),
                         )
                     elif "o" in opt_v["loc"].lower() or "both" in opt_v["loc"].lower():
                         ax.fill_betweenx(
@@ -302,7 +487,12 @@ def catplot(data, *args, **kwargs):
                             color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
                             alpha=opt_v["FaceAlpha"],
                             edgecolor=opt_v["EdgeColor"],
-                            label=label[i],
+                            lw=opt_v["LineWidth"],
+                            hatch=(
+                                opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                if opt_v["hatch"] is not None
+                                else None
+                            ),
                         )
                     elif "i" in opt_v["loc"].lower():
                         if i % 2 == 1:  # odd number
@@ -313,7 +503,12 @@ def catplot(data, *args, **kwargs):
                                 color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
                                 alpha=opt_v["FaceAlpha"],
                                 edgecolor=opt_v["EdgeColor"],
-                                label=label[i],
+                                lw=opt_v["LineWidth"],
+                                hatch=(
+                                    opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                    if opt_v["hatch"] is not None
+                                    else None
+                                ),
                             )
                         else:
                             ax.fill_betweenx(
@@ -323,7 +518,12 @@ def catplot(data, *args, **kwargs):
                                 color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
                                 alpha=opt_v["FaceAlpha"],
                                 edgecolor=opt_v["EdgeColor"],
-                                label=label[i],
+                                lw=opt_v["LineWidth"],
+                                hatch=(
+                                    opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                    if opt_v["hatch"] is not None
+                                    else None
+                                ),
                             )
                     elif "f" in opt_v["loc"].lower():
                         ax.fill_betweenx(
@@ -333,68 +533,166 @@ def catplot(data, *args, **kwargs):
                             color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
                             alpha=opt_v["FaceAlpha"],
                             edgecolor=opt_v["EdgeColor"],
-                            label=label[i],
+                            lw=opt_v["LineWidth"],
+                            hatch=(
+                                opt_v["hatch"][i % len(opt_v["FaceColor"])]
+                                if opt_v["hatch"] is not None
+                                else None
+                            ),
                         )
-            else:
-                if "r" in opt_v["loc"].lower():
-                    ax.fill_betweenx(
-                        y_vals,
-                        x,
-                        x + kde_vals,
-                        color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
-                        alpha=opt_v["FaceAlpha"],
-                        edgecolor=opt_v["EdgeColor"],
-                    )
-                elif "l" in opt_v["loc"].lower() and not "f" in opt_v["loc"].lower():
-                    ax.fill_betweenx(
-                        y_vals,
-                        x - kde_vals,
-                        x,
-                        color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
-                        alpha=opt_v["FaceAlpha"],
-                        edgecolor=opt_v["EdgeColor"],
-                    )
-                elif "o" in opt_v["loc"].lower() or "both" in opt_v["loc"].lower():
-                    ax.fill_betweenx(
-                        y_vals,
-                        x - kde_vals,
-                        x + kde_vals,
-                        color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
-                        alpha=opt_v["FaceAlpha"],
-                        edgecolor=opt_v["EdgeColor"],
-                    )
-                elif "i" in opt_v["loc"].lower():
-                    if i % 2 == 1:  # odd number
-                        ax.fill_betweenx(
-                            y_vals,
-                            x - kde_vals,
-                            x,
-                            color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
-                            alpha=opt_v["FaceAlpha"],
-                            edgecolor=opt_v["EdgeColor"],
-                        )
-                    else:
-                        ax.fill_betweenx(
-                            y_vals,
-                            x,
-                            x + kde_vals,
-                            color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
-                            alpha=opt_v["FaceAlpha"],
-                            edgecolor=opt_v["EdgeColor"],
-                        )
-                elif "f" in opt_v["loc"].lower():
-                    ax.fill_betweenx(
-                        y_vals,
-                        x - kde_vals,
-                        x + kde_vals,
-                        color=opt_v["FaceColor"][i % len(opt_v["FaceColor"])],
-                        alpha=opt_v["FaceAlpha"],
-                        edgecolor=opt_v["EdgeColor"],
-                    )
+
+    def plot_ridgeplot(data, x, y, opt_r, **kwargs_figsets):
+        # in the sns.FacetGrid class, the 'hue' argument is the one that is the one that will be represented by colors with 'palette'
+        if opt_r["column4color"] is None:
+            column4color = x
+        else:
+            column4color = opt_r["column4color"]
+
+        if opt_r["row_labels"] is None:
+            opt_r["row_labels"] = data[x].unique().tolist()
+
+        if isinstance(opt_r["FaceColor"], str):
+            opt_r["FaceColor"] = [opt_r["FaceColor"]]
+        if len(opt_r["FaceColor"]) == 1:
+            opt_r["FaceColor"] = np.tile(
+                opt_r["FaceColor"], [1, len(opt_r["row_labels"])]
+            )[0]
+        if len(opt_r["FaceColor"]) > len(opt_r["row_labels"]):
+            opt_r["FaceColor"] = opt_r["FaceColor"][: len(opt_r["row_labels"])]
+
+        g = sns.FacetGrid(
+            data=data,
+            row=x,
+            hue=column4color,
+            aspect=opt_r["aspect"],
+            height=opt_r["subplot_height"],
+            palette=opt_r["FaceColor"],
+        )
+
+        # kdeplot
+        g.map(
+            sns.kdeplot,
+            y,
+            bw_adjust=opt_r["bw_adjust"],
+            clip_on=opt_r["clip"],
+            fill=opt_r["fill"],
+            alpha=opt_r["FaceAlpha"],
+            linewidth=opt_r["EdgeLineWidth"],
+        )
+
+        # edge / line of kdeplot
+        if opt_r["EdgeColor"] is not None:
+            g.map(
+                sns.kdeplot,
+                y,
+                bw_adjust=opt_r["bw_adjust"],
+                clip_on=opt_r["clip"],
+                color=opt_r["EdgeColor"],
+                lw=opt_r["EdgeLineWidth"],
+            )
+        else:
+            g.map(
+                sns.kdeplot,
+                y,
+                bw_adjust=opt_r["bw_adjust"],
+                clip_on=opt_r["clip"],
+                color=opt_r["EdgeColor"],
+                lw=opt_r["EdgeLineWidth"],
+            )
+
+        # add a horizontal line
+        if opt_r["xLineColor"] is not None:
+            g.map(
+                plt.axhline,
+                y=0,
+                lw=opt_r["xLineWidth"],
+                clip_on=opt_r["clip"],
+                color=opt_r["xLineColor"],
+            )
+        else:
+            g.map(
+                plt.axhline,
+                y=0,
+                lw=opt_r["xLineWidth"],
+                clip_on=opt_r["clip"],
+            )
+
+        if isinstance(opt_r["color_row_label"], str):
+            opt_r["color_row_label"] = [opt_r["color_row_label"]]
+        if len(opt_r["color_row_label"]) == 1:
+            opt_r["color_row_label"] = np.tile(
+                opt_r["color_row_label"], [1, len(opt_r["row_labels"])]
+            )[0]
+
+        # loop over the FacetGrid figure axes (g.axes.flat)
+        for i, ax in enumerate(g.axes.flat):
+            if kwargs_figsets.get("xlim", False):
+                ax.set_xlim(kwargs_figsets.get("xlim", False))
+            if kwargs_figsets.get("xlim", False):
+                ax.set_ylim(kwargs_figsets.get("ylim", False))
+            if i == 0:
+                row_x = opt_r["row_label_loc_xscale"] * np.abs(
+                    np.diff(ax.get_xlim())
+                ) + np.min(ax.get_xlim())
+                row_y = opt_r["row_label_loc_yscale"] * np.abs(
+                    np.diff(ax.get_ylim())
+                ) + np.min(ax.get_ylim())
+                ax.set_title(kwargs_figsets.get("title", ""))
+            ax.text(
+                row_x,
+                row_y,
+                opt_r["row_labels"][i],
+                fontweight=opt_r["fontweight"],
+                fontsize=opt_r["fontsize"],
+                color=opt_r["color_row_label"][i],
+            )
+            figsets(**kwargs_figsets)
+
+        # we use matplotlib.Figure.subplots_adjust() function to get the subplots to overlap
+        g.fig.subplots_adjust(hspace=opt_r["subplot_hspace"])
+
+        # eventually we remove axes titles, yticks and spines
+        g.set_titles("")
+        g.set(yticks=[])
+        g.set(ylabel=opt_r["subplot_ylabel"])
+        # if kwargs_figsets:
+        #     g.set(**kwargs_figsets)
+        if kwargs_figsets.get("xlim", False):
+            g.set(xlim=kwargs_figsets.get("xlim", False))
+        g.despine(bottom=True, left=True)
+
+        plt.setp(
+            ax.get_xticklabels(),
+            fontsize=opt_r["fontsize"],
+            fontweight=opt_r["fontweight"],
+        )
+        # if opt_r["ylabel"] is None:
+        #     opt_r["ylabel"] = y
+        # plt.xlabel(
+        #     opt_r["ylabel"], fontweight=opt_r["fontweight"], fontsize=opt_r["fontsize"]
+        # )
+        return g, opt_r
 
     def plot_lines(data, opt_l, opt_s, ax):
+        if "l" in opt_s["loc"]:
+            xloc_s = xloc - opt_s["x_dist"]
+        elif "r" in opt_s["loc"]:
+            xloc_s = xloc + opt_s["x_dist"]
+        elif "i" in opt_s["loc"]:
+            xloc_s = xloc
+            xloc_s[:, 0] += opt_s["x_dist"]
+            xloc_s[:, -1] -= opt_s["x_dist"]
+        elif "o" in opt_s["loc"]:
+            xloc_s = xloc
+            xloc_s[:, 0] -= opt_s["x_dist"]
+            xloc_s[:, -1] += opt_s["x_dist"]
+        elif "c" in opt_s["loc"] or "m" in opt_s["loc"]:
+            xloc_s = xloc
+        else:
+            xloc_s = xloc
+
         scatter_positions = get_positions(
-            xloc, opt_s["loc"], opt_s["x_width"], data.shape[0]
+            xloc_s, opt_s["loc"], opt_s["x_width"], data.shape[0]
         )
         for incol in range(data.shape[1] - 1):
             for irow in range(data.shape[0]):
@@ -448,6 +746,8 @@ def catplot(data, *args, **kwargs):
         """
         sort layers
         """
+        if "r" in full_order:
+            return ["r"]
         # Ensure custom_order is a list of strings
         custom_order = [str(layer) for layer in custom_order]
         j = 1
@@ -468,17 +768,12 @@ def catplot(data, *args, **kwargs):
         # full_order = sort_catplot_layers(custom_order)
 
     ax = kwargs.get("ax", None)
-
     col = kwargs.get("col", None)
+    report = kwargs.get("report", True)
+    vertical = kwargs.get("vertical", True)
+    stats_subgroup = kwargs.get("stats_subgroup", True)
     if not col:
-        if "ax" not in locals() or ax is None:
-            ax = plt.gca()
-        # figsets
         kw_figsets = kwargs.get("figsets", None)
-        # if kw_figsets:
-        #     ylim_tmp=kw_figsets.get("ylim",None)
-        # if ylim_tmp:
-        #     ax.set_ylim(ylim_tmp)
         # check the data type
         if isinstance(data, pd.DataFrame):
             df = data.copy()
@@ -509,29 +804,101 @@ def catplot(data, *args, **kwargs):
                 for i in df[x].unique().tolist():
                     print(i)  # to indicate which 'x'
                     if hue and stats_param:
-                        if isinstance(stats_param, dict):
-                            if "factor" in stats_param.keys():
-                                res_tmp = FuncMultiCmpt(data=df, dv=y, **stats_param)
-                            else:
-                                res_tmp = FuncMultiCmpt(
-                                    data=df[df[x] == i], dv=y, factor=hue, **stats_param
+                        if stats_subgroup:
+                            data_temp = df[df[x] == i]
+                            hue_labels = data_temp[hue].unique().tolist()
+                            if isinstance(stats_param, dict):
+                                if len(hue_labels) > 2:
+                                    if "factor" in stats_param.keys():
+                                        res_tmp = FuncMultiCmpt(
+                                            data=data_temp, dv=y, **stats_param
+                                        )
+                                    else:
+                                        res_tmp = FuncMultiCmpt(
+                                            data=data_temp,
+                                            dv=y,
+                                            factor=hue,
+                                            **stats_param,
+                                        )
+                                elif bool(stats_param):
+                                    res_tmp = FuncMultiCmpt(
+                                        data=data_temp, dv=y, factor=hue
+                                    )
+                                else:
+                                    res_tmp = "did not work properly"
+                                display_output(res_tmp)
+                                res = pd.concat(
+                                    [res, pd.DataFrame([res_tmp])],
+                                    ignore_index=True,
+                                    axis=0,
                                 )
-                        elif bool(stats_param):
-                            res_tmp = FuncMultiCmpt(data=df, dv=y, factor=hue)
+                            else:
+                                if isinstance(stats_param, dict):
+                                    pmc = stats_param.get("pmc", "pmc")
+                                    pair = stats_param.get("pair", "unpaired")
+                                else:
+                                    pmc = "pmc"
+                                    pair = "unpair"
+
+                                res_tmp = FuncCmpt(
+                                    x1=data_temp.loc[
+                                        data_temp[hue] == hue_labels[0], y
+                                    ].tolist(),
+                                    x2=data_temp.loc[
+                                        data_temp[hue] == hue_labels[1], y
+                                    ].tolist(),
+                                    pmc=pmc,
+                                    pair=pair,
+                                )
+                                display_output(res_tmp)
                         else:
-                            res_tmp = "did not work properly"
-                        display_output(res_tmp)
-                        xloc_curr = hue_len * (ihue - 1)
-                        # add_asterisks(ax,res_tmp,xticks[xloc_curr:xloc_curr+hue_len],legend_hue)
-                        # res_tmp = [{"x": i, **res_tmp}]
-                        # print("here")
-                        # df_=pd.DataFrame([res_tmp])
-                        # display(df_['pval'][0].tolist()[0])
-                        res = pd.concat(
-                            [res, pd.DataFrame([res_tmp])], ignore_index=True
-                        )
+                            if isinstance(stats_param, dict):
+                                if len(xticklabels) > 2:
+                                    if "factor" in stats_param.keys():
+                                        res_tmp = FuncMultiCmpt(
+                                            data=df, dv=y, **stats_param
+                                        )
+                                    else:
+                                        res_tmp = FuncMultiCmpt(
+                                            data=df[df[x] == i],
+                                            dv=y,
+                                            factor=hue,
+                                            **stats_param,
+                                        )
+                                elif bool(stats_param):
+                                    res_tmp = FuncMultiCmpt(
+                                        data=df[df[x] == i], dv=y, factor=hue
+                                    )
+                                else:
+                                    res_tmp = "did not work properly"
+                                display_output(res_tmp)
+                                res = pd.concat(
+                                    [res, pd.DataFrame([res_tmp])],
+                                    ignore_index=True,
+                                    axis=0,
+                                )
+                            else:
+                                if isinstance(stats_param, dict):
+                                    pmc = stats_param.get("pmc", "pmc")
+                                    pair = stats_param.get("pair", "unpaired")
+                                else:
+                                    pmc = "pmc"
+                                    pair = "unpair"
+
+                                data_temp = df[df[x] == i]
+                                hue_labels = data_temp[hue].unique().tolist()
+                                res_tmp = FuncCmpt(
+                                    x1=data_temp.loc[
+                                        data_temp[hue] == hue_labels[0], y
+                                    ].tolist(),
+                                    x2=data_temp.loc[
+                                        data_temp[hue] == hue_labels[1], y
+                                    ].tolist(),
+                                    pmc=pmc,
+                                    pair=pair,
+                                )
+                                display_output(res_tmp)
                     ihue += 1
-                display_output(res)
 
             else:
                 # ! stats info
@@ -564,7 +931,6 @@ def catplot(data, *args, **kwargs):
                             )
                     else:
                         res = "did not work properly"
-                display(res)
                 display_output(res)
 
             # when the xticklabels are too long, rotate the labels a bit
@@ -609,11 +975,6 @@ def catplot(data, *args, **kwargs):
                 else:
                     res = "did not work properly"
             display_output(res)
-            # xticks = np.arange(1, data.shape[1] + 1).tolist()
-            # default_x_width = 0.5
-            # default_colors = get_color(len(xticks))
-            # legend_hue = None
-            # xangle = 0
 
         # full_order
         opt = kwargs.get("opt", {})
@@ -624,22 +985,27 @@ def catplot(data, *args, **kwargs):
             if "style" in k and "exp" not in k:
                 style_use = v
                 break
-        if style_use:
+        if style_use is not None:
             try:
                 dir_curr_script = os.path.dirname(os.path.abspath(__file__))
                 dir_style = dir_curr_script + "/data/styles/"
-                style_load = fload(dir_style + style_use + ".json")
+                if isinstance(style_use, str):
+                    style_load = fload(dir_style + style_use + ".json")
+                else:
+                    style_load = fload(
+                        listdir(dir_style, "json").path.tolist()[style_use]
+                    )
                 style_load = remove_colors_in_dict(style_load)
                 opt.update(style_load)
             except:
-                print(f"cannot find the style'{style_name}'")
+                print(f"cannot find the style'{style_use}'")
 
-        opt.setdefault("c", default_colors)
-        # if len(opt["c"]) < data.shape[1]:
-        #     additional_colors = plt.cm.winter(
-        #         np.linspace(0, 1, data.shape[1] - len(opt["c"]))
-        #     )
-        #     opt["c"] = np.vstack([opt["c"], additional_colors[:, :3]])
+        color_custom = kwargs.get("c", default_colors)
+        if not isinstance(color_custom, list):
+            color_custom = list(color_custom)
+        # if len(color_custom) < data.shape[1]:
+        #     color_custom.extend(get_color(data.shape[1]-len(color_custom),cmap='tab20'))
+        opt.setdefault("c", color_custom)
 
         opt.setdefault("loc", {})
         opt["loc"].setdefault("go", 0)
@@ -647,58 +1013,58 @@ def catplot(data, *args, **kwargs):
 
         # export setting
         opt.setdefault("style", {})
-        opt["style"].setdefault("export", None)
-        print(opt["style"])
-
-        # opt.setdefault('layer', {})
         opt.setdefault("layer", ["b", "bx", "e", "v", "s", "l"])
 
         opt.setdefault("b", {})
         opt["b"].setdefault("go", 1)
         opt["b"].setdefault("loc", "c")
-        opt["b"].setdefault("FaceColor", opt["c"])
+        opt["b"].setdefault("FaceColor", color_custom)
         opt["b"].setdefault("FaceAlpha", 1)
         opt["b"].setdefault("EdgeColor", "k")
         opt["b"].setdefault("EdgeAlpha", 1)
         opt["b"].setdefault("LineStyle", "-")
         opt["b"].setdefault("LineWidth", 0.8)
         opt["b"].setdefault("x_width", default_x_width)
+        opt["b"].setdefault("x_dist", opt["b"]["x_width"])
         opt["b"].setdefault("ShowBaseLine", "off")
         opt["b"].setdefault("hatch", None)
 
         opt.setdefault("e", {})
         opt["e"].setdefault("go", 1)
         opt["e"].setdefault("loc", "l")
-        opt["e"].setdefault("LineWidth", 1)
+        opt["e"].setdefault("LineWidth", 2)
         opt["e"].setdefault("CapLineWidth", 1)
         opt["e"].setdefault("CapSize", 2)
         opt["e"].setdefault("Marker", "none")
         opt["e"].setdefault("LineStyle", "none")
         opt["e"].setdefault("LineColor", "k")
+        opt["e"].setdefault("LineAlpha", 0.5)
         opt["e"].setdefault("LineJoin", "round")
         opt["e"].setdefault("MarkerSize", "auto")
-        opt["e"].setdefault("FaceColor", opt["c"])
+        opt["e"].setdefault("FaceColor", color_custom)
         opt["e"].setdefault("MarkerEdgeColor", "none")
         opt["e"].setdefault("Visible", True)
         opt["e"].setdefault("Orientation", "vertical")
         opt["e"].setdefault("error", "sem")
         opt["e"].setdefault("x_width", default_x_width / 5)
+        opt["e"].setdefault("x_dist", opt["e"]["x_width"])
         opt["e"].setdefault("cap_dir", "b")
 
         opt.setdefault("s", {})
         opt["s"].setdefault("go", 1)
         opt["s"].setdefault("loc", "r")
-        opt["s"].setdefault("FaceColor", "w")
+        opt["s"].setdefault("FaceColor", color_custom)
         opt["s"].setdefault("cmap", None)
         opt["s"].setdefault("FaceAlpha", 1)
-        opt["s"].setdefault("x_width", default_x_width / 5)
+        opt["s"].setdefault("x_width", default_x_width / 5 * 0.5)
+        opt["s"].setdefault("x_dist", opt["s"]["x_width"])
         opt["s"].setdefault("Marker", "o")
         opt["s"].setdefault("MarkerSize", 15)
         opt["s"].setdefault("LineWidth", 0.8)
         opt["s"].setdefault("MarkerEdgeColor", "k")
 
         opt.setdefault("l", {})
-        opt["l"].setdefault("go", 1)
+        opt["l"].setdefault("go", 0)
         opt["l"].setdefault("LineStyle", "-")
         opt["l"].setdefault("LineColor", "k")
         opt["l"].setdefault("LineWidth", 0.5)
@@ -707,17 +1073,19 @@ def catplot(data, *args, **kwargs):
         opt.setdefault("bx", {})
         opt["bx"].setdefault("go", 0)
         opt["bx"].setdefault("loc", "r")
-        opt["bx"].setdefault("FaceColor", opt["c"])
+        opt["bx"].setdefault("FaceColor", color_custom)
         opt["bx"].setdefault("EdgeColor", "k")
         opt["bx"].setdefault("FaceAlpha", 0.85)
         opt["bx"].setdefault("EdgeAlpha", 1)
         opt["bx"].setdefault("LineStyle", "-")
         opt["bx"].setdefault("x_width", default_x_width / 5)
+        opt["bx"].setdefault("x_dist", opt["bx"]["x_width"])
         opt["bx"].setdefault("ShowBaseLine", "off")
         opt["bx"].setdefault("Notch", False)
         opt["bx"].setdefault("Outliers", "on")
         opt["bx"].setdefault("OutlierMarker", "+")
-        opt["bx"].setdefault("OutlierColor", "r")
+        opt["bx"].setdefault("OutlierFaceColor", "r")
+        opt["bx"].setdefault("OutlierEdgeColor", "k")
         opt["bx"].setdefault("OutlierSize", 6)
         # opt['bx'].setdefault('PlotStyle', 'traditional')
         # opt['bx'].setdefault('FactorDirection', 'auto')
@@ -749,15 +1117,43 @@ def catplot(data, *args, **kwargs):
         opt.setdefault("v", {})
         opt["v"].setdefault("go", 0)
         opt["v"].setdefault("x_width", 0.3)
+        opt["v"].setdefault("x_dist", opt["v"]["x_width"])
         opt["v"].setdefault("loc", "r")
         opt["v"].setdefault("EdgeColor", "none")
-        opt["v"].setdefault("FaceColor", opt["c"])
-        opt["v"].setdefault("FaceAlpha", 0.3)
+        opt["v"].setdefault("LineWidth", 0.5)
+        opt["v"].setdefault("FaceColor", color_custom)
+        opt["v"].setdefault("FaceAlpha", 1)
         opt["v"].setdefault("BandWidth", "scott")
         opt["v"].setdefault("Function", "pdf")
         opt["v"].setdefault("Kernel", "gau")
+        opt["v"].setdefault("hatch", None)
         opt["v"].setdefault("NumPoints", 500)
         opt["v"].setdefault("BoundaryCorrection", "reflection")
+
+        # ridgeplot
+        opt.setdefault("r", {})
+        opt["r"].setdefault("go", 0)
+        opt["r"].setdefault("bw_adjust", 1)
+        opt["r"].setdefault("clip", False)
+        opt["r"].setdefault("FaceColor", get_color(20))
+        opt["r"].setdefault("FaceAlpha", 1)
+        opt["r"].setdefault("EdgeLineWidth", 1.5)
+        opt["r"].setdefault("fill", True)
+        opt["r"].setdefault("EdgeColor", "none")
+        opt["r"].setdefault("xLineWidth", opt["r"]["EdgeLineWidth"] + 0.5)
+        opt["r"].setdefault("xLineColor", "none")
+        opt["r"].setdefault("aspect", 8)
+        opt["r"].setdefault("subplot_hspace", -0.3)  # overlap subplots
+        opt["r"].setdefault("subplot_height", 0.75)
+        opt["r"].setdefault("subplot_ylabel", "")
+        opt["r"].setdefault("column4color", None)
+        opt["r"].setdefault("row_labels", None)
+        opt["r"].setdefault("row_label_loc_xscale", 0.01)
+        opt["r"].setdefault("row_label_loc_yscale", 0.05)
+        opt["r"].setdefault("fontweight", plt.rcParams["font.weight"])
+        opt["r"].setdefault("fontsize", plt.rcParams["font.size"])
+        opt["r"].setdefault("color_row_label", "k")
+        opt["r"].setdefault("ylabel", None)
 
         data_m = np.nanmean(data, axis=0)
         nr, nc = data.shape
@@ -772,19 +1168,25 @@ def catplot(data, *args, **kwargs):
             xloc = np.array(opt["loc"]["xloc"])
         else:
             xloc = opt["loc"]["xloc"]
-        layers = sort_catplot_layers(opt["layer"])
+        if opt["r"]["go"]:
+            layers = sort_catplot_layers(opt["layer"], "r")
+        else:
+            layers = sort_catplot_layers(opt["layer"])
 
-        label_which = kwargs.get("label_which", "barplot")
-        if "b" in label_which:
-            legend_which = "b"
-        elif "s" in label_which:
-            legend_which = "s"
-        elif "bx" in label_which:
-            legend_which = "bx"
-        elif "e" in label_which:
-            legend_which = "e"
-        elif "v" in label_which:
-            legend_which = "v"
+        if ("ax" not in locals() or ax is None) and not opt["r"]["go"]:
+            ax = plt.gca()
+        label = kwargs.get("label", "bar")
+        if label:
+            if "b" in label:
+                legend_which = "b"
+            elif "s" in label:
+                legend_which = "s"
+            elif "bx" in label:
+                legend_which = "bx"
+            elif "e" in label:
+                legend_which = "e"
+            elif "v" in label:
+                legend_which = "v"
         else:
             legend_which = None
         for layer in layers:
@@ -810,71 +1212,129 @@ def catplot(data, *args, **kwargs):
                     plot_boxplot(data, opt["bx"], xloc, ax, label=None)
             elif layer == "v" and opt["v"]["go"]:
                 if legend_which == "v":
-                    plot_violin(data, opt["v"], xloc, ax, label=legend_hue)
+                    plot_violin(
+                        data, opt["v"], xloc, ax, label=legend_hue, vertical=vertical
+                    )
                 else:
-                    plot_violin(data, opt["v"], xloc, ax, label=None)
+                    plot_violin(data, opt["v"], xloc, ax, vertical=vertical, label=None)
+            elif layer == "r" and opt["r"]["go"]:
+                kwargs_figsets = kwargs.get("figsets", None)
+                if x and y:
+                    if kwargs_figsets:
+                        plot_ridgeplot(df, x, y, opt["r"], **kwargs_figsets)
+                    else:
+                        plot_ridgeplot(df, x, y, opt["r"])
             elif all([layer == "l", opt["l"]["go"], opt["s"]["go"]]):
                 plot_lines(data, opt["l"], opt["s"], ax)
 
-        if kw_figsets is not None:
+        if kw_figsets is not None and not opt["r"]["go"]:
             figsets(ax=ax, **kw_figsets)
         show_legend = kwargs.get("show_legend", True)
-        if show_legend:
+        if show_legend and not opt["r"]["go"]:
             ax.legend()
         # ! add asterisks in the plot
-        # print("here")
-        # print(stats_param,isinstance(data, pd.DataFrame),hue)
         if stats_param:
-            if isinstance(data, pd.DataFrame):
+            if len(xticklabels) >= 1:
                 if hue is None:
-                    display(res)
-                    add_asterisks(ax, res, xticks_x_loc, xticklabels)
+                    add_asterisks(
+                        ax,
+                        res,
+                        xticks_x_loc,
+                        xticklabels,
+                        y_loc=np.nanmax(data),
+                        report_go=report,
+                    )
                 else:  # hue is not None
                     ihue = 1
                     for i in df[x].unique().tolist():
+                        data_temp = df[df[x] == i]
+                        hue_labels = data_temp[hue].unique().tolist()
                         if stats_param:
-                            if isinstance(stats_param, dict):
-                                if "factor" in stats_param.keys():
+                            if len(hue_labels) > 2:
+                                if isinstance(stats_param, dict):
+                                    if "factor" in stats_param.keys():
+                                        res_tmp = FuncMultiCmpt(
+                                            data=df, dv=y, **stats_param
+                                        )
+                                    else:
+                                        res_tmp = FuncMultiCmpt(
+                                            data=df[df[x] == i],
+                                            dv=y,
+                                            factor=hue,
+                                            **stats_param,
+                                        )
+                                elif bool(stats_param):
                                     res_tmp = FuncMultiCmpt(
-                                        data=df, dv=y, **stats_param
+                                        data=df[df[x] == i], dv=y, factor=hue
                                     )
                                 else:
-                                    res_tmp = FuncMultiCmpt(
-                                        data=df[df[x] == i],
-                                        dv=y,
-                                        factor=hue,
-                                        **stats_param,
-                                    )
-                            elif bool(stats_param):
-                                res_tmp = FuncMultiCmpt(data=df, dv=y, factor=hue)
-                            else:
-                                res_tmp = "did not work properly"
-                            xloc_curr = hue_len * (ihue - 1)
+                                    res_tmp = "did not work properly"
+                                xloc_curr = hue_len * (ihue - 1)
 
-                            add_asterisks(
-                                ax,
-                                res_tmp,
-                                xticks[xloc_curr : xloc_curr + hue_len],
-                                legend_hue,
-                            )
+                                add_asterisks(
+                                    ax,
+                                    res_tmp,
+                                    xticks[xloc_curr : xloc_curr + hue_len],
+                                    legend_hue,
+                                    y_loc=np.nanmax(data),
+                                    report_go=report,
+                                )
+                            else:
+                                if isinstance(stats_param, dict):
+                                    pmc = stats_param.get("pmc", "pmc")
+                                    pair = stats_param.get("pair", "unpaired")
+                                else:
+                                    pmc = "pmc"
+                                    pair = "unpair"
+                                res_tmp = FuncCmpt(
+                                    x1=data_temp.loc[
+                                        data_temp[hue] == hue_labels[0], y
+                                    ].tolist(),
+                                    x2=data_temp.loc[
+                                        data_temp[hue] == hue_labels[1], y
+                                    ].tolist(),
+                                    pmc=pmc,
+                                    pair=pair,
+                                )
+                                xloc_curr = hue_len * (ihue - 1)
+                                add_asterisks(
+                                    ax,
+                                    res_tmp,
+                                    xticks[xloc_curr : xloc_curr + hue_len],
+                                    legend_hue,
+                                    y_loc=np.nanmax(data),
+                                    report_go=report,
+                                )
                         ihue += 1
-            else:
-                if len(xticklabels) == 2:
+            else:  # 240814: still has some bugs
+                if isinstance(res, dict):
                     tab_res = pd.DataFrame(res[1], index=[0])
                     x1 = df.loc[df[x] == xticklabels[0], y].tolist()
                     x2 = df.loc[df[x] == xticklabels[1], y].tolist()
                     tab_res[f"{xticklabels[0]}(mean±sem)"] = [str_mean_sem(x1)]
                     tab_res[f"{xticklabels[1]}(mean±sem)"] = [str_mean_sem(x2)]
-
-                    display(
-                        tab_res,
-                        str_mean_sem(df.loc[df[x] == xticklabels[0], y].tolist()),
-                    )
                     add_asterisks(
-                        ax, res[1], xticks_x_loc, xticklabels, y_loc=np.max([x1, x2])
+                        ax,
+                        res[1],
+                        xticks_x_loc,
+                        xticklabels,
+                        y_loc=np.max([x1, x2]),
+                        report_go=report,
                     )
-                else:
-                    add_asterisks(ax, res, xticks_x_loc, xticklabels, yloc=np.max(data))
+                elif isinstance(res, pd.DataFrame):
+                    display(res)
+                    print("still has some bugs")
+                    x1 = df.loc[df[x] == xticklabels[0], y].tolist()
+                    x2 = df.loc[df[x] == xticklabels[1], y].tolist()
+                    add_asterisks(
+                        ax,
+                        res,
+                        xticks_x_loc,
+                        xticklabels,
+                        y_loc=np.max([x1, x2]),
+                        report_go=report,
+                    )
+
         style_export = kwargs.get("style_export", None)
         if style_export and (style_export != style_use):
             dir_curr_script = os.path.dirname(os.path.abspath(__file__))
@@ -910,6 +1370,11 @@ def get_cmap():
 
 
 def read_mplstyle(style_file):
+    """
+    example usage:
+    style_file = "/ std-colors.mplstyle"
+    style_dict = read_mplstyle(style_file)
+    """
     # Load the style file
     plt.style.use(style_file)
 
@@ -922,11 +1387,6 @@ def read_mplstyle(style_file):
     for i, j in style_dict.items():
         print(f"\n{i}::::{j}")
     return style_dict
-
-
-# #example usage:
-# style_file = "/ std-colors.mplstyle"
-# style_dict = read_mplstyle(style_file)
 
 
 def figsets(*args, **kwargs):
@@ -1004,7 +1464,6 @@ def figsets(*args, **kwargs):
     def set_step_1(ax, key, value):
         if ("fo" in key) and (("size" in key) or ("sz" in key)):
             fontsize = value
-            print(fontsize)
             plt.rcParams.update({"font.size": fontsize})
         # style
         if "st" in key.lower() or "th" in key.lower():
@@ -1251,7 +1710,9 @@ def figsets(*args, **kwargs):
                 # https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.legend.html
                 ax.legend(**legend_kws)
             else:
-                ax.legend().remove()
+                legend = ax.get_legend()
+                if legend is not None:
+                    legend.remove()
 
     for arg in args:
         if isinstance(arg, matplotlib.axes._axes.Axes):
@@ -1307,6 +1768,8 @@ def get_color(
     by: str = "start",
     alpha: float = 1.0,
     output: str = "hue",
+    *args,
+    **kwargs,
 ):
     def cmap2hex(cmap_name):
         cmap_ = matplotlib.pyplot.get_cmap(cmap_name)
@@ -1356,18 +1819,79 @@ def get_color(
         else:
             return "#{:02X}{:02X}{:02X}".format(r, g, b)
 
+    if cmap == "gray":
+        cmap = "grey"
     # Determine color list based on cmap parameter
     if "aut" in cmap:
-        colorlist = [
-            "#474747",
-            "#FF2C00",
-            "#0C5DA5",
-            "#845B97",
-            "#58BBCC",
-            "#FF9500",
-            "#D57DBE",
-        ]
+        if n == 1:
+            colorlist = ["#3A4453"]
+        elif n == 2:
+            colorlist = ["#3A4453", "#DF5932"]
+        elif n == 3:
+            colorlist = ["#3A4453", "#DF5932", "#299D8F"]
+        elif n == 4:
+            # colorlist = ["#3A4453", "#DF5932", "#EBAA00", "#0B4083"]
+            colorlist = ["#81C6BD", "#FBAF63", "#F2675B", "#72A1C9"]
+        elif n == 5:
+            colorlist = [
+                "#3A4453",
+                "#427AB2",
+                "#F09148",
+                "#DBDB8D",
+                "#C59D94",
+                "#AFC7E8",
+            ]
+        elif n == 6:
+            colorlist = [
+                "#3A4453",
+                "#427AB2",
+                "#F09148",
+                "#DBDB8D",
+                "#C59D94",
+                "#E53528",
+            ]
+        else:
+            colorlist = [
+                "#474747",
+                "#FF2C00",
+                "#0C5DA5",
+                "#845B97",
+                "#58BBCC",
+                "#FF9500",
+                "#D57DBE",
+            ]
+        by = "start"
+    elif any(["cub" in cmap.lower(), "sns" in cmap.lower()]):
+        if kwargs:
+            colorlist = sns.cubehelix_palette(n, **kwargs)
+        else:
+            colorlist = sns.cubehelix_palette(
+                n, start=0.5, rot=-0.75, light=0.85, dark=0.15, as_cmap=False
+            )
+        colorlist = [matplotlib.colors.rgb2hex(color) for color in colorlist]
+    elif any(["hls" in cmap.lower(), "hsl" in cmap.lower()]):
+        if kwargs:
+            colorlist = sns.hls_palette(n, **kwargs)
+        else:
+            colorlist = sns.hls_palette(n)
+        colorlist = [matplotlib.colors.rgb2hex(color) for color in colorlist]
+    elif any(["col" in cmap.lower(), "pal" in cmap.lower()]):
+        palette, desat, as_cmap = None, None, False
+        if kwargs:
+            for k, v in kwargs.items():
+                if "p" in k:
+                    palette = v
+                elif "d" in k:
+                    desat = v
+                elif "a" in k:
+                    as_cmap = v
+        colorlist = sns.color_palette(
+            palette=palette, n_colors=n, desat=desat, as_cmap=as_cmap
+        )
+        colorlist = [matplotlib.colors.rgb2hex(color) for color in colorlist]
     else:
+        if by == "start":
+            by = "linspace"
         colorlist = cmap2hex(cmap)
 
     # Determine method for generating color list
@@ -1413,6 +1937,10 @@ import matplotlib.pyplot as plt
 
 
 def stdshade(ax=None, *args, **kwargs):
+    """
+    usage:
+    plot.stdshade(data_array, c=clist[1], lw=2, ls="-.", alpha=0.2)
+    """
     # Separate kws_line and kws_fill if necessary
     kws_line = kwargs.pop("kws_line", {})
     kws_fill = kwargs.pop("kws_fill", {})
@@ -1450,8 +1978,9 @@ def stdshade(ax=None, *args, **kwargs):
         ax = plt.gca()
     if ax is None:
         ax = plt.gca()
-    alpha = 0.5
-    acolor = "k"
+    alpha = kwargs.get("alpha", 0.2)
+    acolor = kwargs.get("color", "k")
+    acolor = kwargs.get("c", "k")
     paraStdSem = "sem"
     plotStyle = "-"
     plotMarker = "none"
@@ -1729,16 +2258,12 @@ def remove_colors_in_dict(
 
 
 def add_asterisks(ax, res, xticks_x_loc, xticklabels, **kwargs_funcstars):
-    y_max_loc = kwargs_funcstars.get("kwargs_funcstars", None)
     if len(xticklabels) > 2:
         if isinstance(res, dict):
-            display(res["res_tab"])
             pval_groups = res["res_tab"]["p-unc"].tolist()[0]
         else:
             pval_groups = res["res_tab"]["PR(>F)"].tolist()[0]
-        # print(f"p=:{pval_groups}")
-        # print(f"xticks:{xticks}")
-        # print(f"xticks_x_loc:{xticks_x_loc}")
+        report_go = kwargs_funcstars.get("report_go", False)
         if pval_groups <= 0.05:
             A_list = res["res_posthoc"]["A"].tolist()
             B_list = res["res_posthoc"]["B"].tolist()
@@ -1751,7 +2276,6 @@ def add_asterisks(ax, res, xticks_x_loc, xticklabels, **kwargs_funcstars):
             ):
                 index_A = np.where(xticklabels_array == A)[0][0]
                 index_B = np.where(xticklabels_array == B)[0][0]
-                print(index_A, A, index_B, B, P)
                 FuncStars(
                     ax=ax,
                     x1=xticks_x_loc[index_A],
@@ -1761,13 +2285,85 @@ def add_asterisks(ax, res, xticks_x_loc, xticklabels, **kwargs_funcstars):
                     **kwargs_funcstars,
                 )
                 if P <= 0.05:
-                    yscal_ -= 0.1
+                    yscal_ -= 0.075
+        if report_go:
+            try:
+                if isinstance(res["APA"], list):
+                    APA_str = res["APA"][0]
+                else:
+                    APA_str = res["APA"]
+            except:
+                pass
+
+            FuncStars(
+                ax=ax,
+                x1=(
+                    xticks_x_loc[0] - (xticks_x_loc[-1] - xticks_x_loc[0]) / 3
+                    if xticks_x_loc[0] > 1
+                    else xticks_x_loc[0]
+                ),
+                x2=(
+                    xticks_x_loc[0] - (xticks_x_loc[-1] - xticks_x_loc[0]) / 3
+                    if xticks_x_loc[0] > 1
+                    else xticks_x_loc[0]
+                ),
+                pval=None,
+                report_scale=np.random.uniform(0.7, 0.99),
+                report=APA_str,
+                fontsize_note=8,
+            )
     else:
-        pval_groups = res["pval"]
-        FuncStars(
-            ax=ax,
-            x1=1,
-            x2=2,
-            pval=pval_groups,
-            **kwargs_funcstars,
+        if isinstance(res, tuple):
+            res = res[1]
+            pval_groups = res["pval"]
+            FuncStars(
+                ax=ax,
+                x1=xticks_x_loc[0],
+                x2=xticks_x_loc[1],
+                pval=pval_groups,
+                **kwargs_funcstars,
+            )
+        # else:
+        #     pval_groups = res["pval"]
+        #     FuncStars(
+        #         ax=ax,
+        #         x1=1,
+        #         x2=2,
+        #         pval=pval_groups,
+        #         **kwargs_funcstars,
+        #     )
+
+
+def style_examples(
+    dir_save="/Users/macjianfeng/Dropbox/github/python/py2ls/.venv/lib/python3.12/site-packages/py2ls/data/styles/example",
+):
+    f = listdir(
+        "/Users/macjianfeng/Dropbox/github/python/py2ls/.venv/lib/python3.12/site-packages/py2ls/data/styles/",
+        kind=".json",
+    )
+    display(f.sample(2))
+    # def style_example(dir_save,)
+    # Sample data creation
+    np.random.seed(42)
+    categories = ["A", "B", "C", "D", "E"]
+    data = pd.DataFrame(
+        {
+            "value": np.concatenate(
+                [np.random.normal(loc, 0.4, 100) for loc in range(5)]
+            ),
+            "category": np.repeat(categories, 100),
+        }
+    )
+    for i in range(f.num[0]):
+        plt.figure()
+        _, _ = catplot(
+            data=data,
+            x="category",
+            y="value",
+            style=i,
+            figsets=dict(title=f"style{i+1} or style idx={i}"),
+        )
+        figsave(
+            dir_save,
+            f"{f.name[i]}.pdf",
         )

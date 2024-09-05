@@ -63,6 +63,36 @@ def user_agent(
     return output_ua
 
 
+def get_tags(content, ascending=True):
+    tag_names = set()
+
+    # Iterate through all tags in the parsed HTML
+    for tag in content.find_all(True):  # `True` finds all tags
+        tag_names.add(tag.name)  # Add the tag name to the set
+
+    # Convert set to a sorted list for easier reading (optional)
+    if ascending is None:
+        return tag_names
+    else:
+        if ascending:
+            return sorted(tag_names)
+        else:
+            return tag_names
+
+
+def get_attr(content, where, attr):
+    all_tags = get_tags(content)
+    if all([where, attr]):
+        if where in all_tags:
+            element_ = content.find_all(where)
+            return [i[attr] for i in element_]
+        else:
+            print(
+                f"cannot find attr {attr} in tag_name{where}\n or possibly cannot find the tag_names:"
+            )
+            pp(all_tags)
+
+
 def extract_text_from_content(
     content, content_type="text/html", where=None, what=None, extend=True, **kwargs
 ):
@@ -128,7 +158,9 @@ def extract_text_from_content(
                 result_set = content.find_all(where, **search_kwargs)
             else:
                 result_set = content.find_all(where, attrs=dict(**search_kwargs))
-
+            if "get" in kwargs:
+                attr = kwargs["get"]
+                return get_attr(content, where, attr)
             if not result_set:
                 print("Failed: check the 'attrs' setting:  attrs={'id':'xample'}")
             if extend:
@@ -204,9 +236,70 @@ def get_proxy():
 
 
 # proxies_glob=get_proxy()
-def get_soup(url, driver="req"):
-    _, soup_ = fetch_all(url, driver=driver)
+def get_soup(url, **kwargs):
+    _, soup_ = fetch_all(url, **kwargs)
     return soup_
+
+
+def get_cookies(url, login={"username": "your_username", "password": "your_password"}):
+    session = requests.Session()
+    response = session.post(url, login)
+    cookies_dict = session.cookies.get_dict()
+    return cookies_dict
+
+
+### 更加平滑地移动鼠标, 这样更容易反爬
+def scroll_smth_steps(driver, scroll_pause=0.5, min_step=200, max_step=600):
+    """Smoothly scrolls down the page to trigger lazy loading."""
+    current_scroll_position = 0
+    end_of_page = driver.execute_script("return document.body.scrollHeight")
+
+    while current_scroll_position < end_of_page:
+        step = random.randint(min_step, max_step)
+        driver.execute_script(f"window.scrollBy(0, {step});")
+        time.sleep(scroll_pause)
+
+        # Update the current scroll position
+        current_scroll_position += step
+        end_of_page = driver.execute_script("return document.body.scrollHeight")
+
+
+def scroll_inf2end(driver, scroll_pause=1):
+    """Continuously scrolls until the end of the page is reached."""
+    last_height = driver.execute_script("return document.body.scrollHeight")
+
+    while True:
+        # Scroll to the bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(scroll_pause)
+
+        # Get the new height after scrolling
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break  # Exit if no new content is loaded
+        last_height = new_height
+
+
+def corr_by_kind(wait_until_kind):
+    """
+    Map the 'wait_until_kind' string to the appropriate Selenium By strategy.
+    """
+    if "tag" in wait_until_kind:
+        return By.TAG_NAME
+    elif "css" in wait_until_kind:
+        return By.CSS_SELECTOR
+    elif "id" in wait_until_kind:
+        return By.ID
+    elif "name" in wait_until_kind:
+        return By.NAME
+    elif "class" in wait_until_kind:
+        return By.CLASS_NAME
+    elif "path" in wait_until_kind:
+        return By.XPATH
+    elif "link" in wait_until_kind or "text" in wait_until_kind:
+        return By.LINK_TEXT
+    else:
+        raise ValueError(f"Unsupported wait_until_kind: {wait_until_kind}")
 
 
 def fetch_all(
@@ -216,6 +309,10 @@ def fetch_all(
     by=By.TAG_NAME,
     timeout=10,
     retry=2,
+    wait=0,
+    wait_until=None,
+    wait_until_kind=None,
+    scroll_try=3,
     login_url=None,
     username=None,
     password=None,
@@ -230,6 +327,7 @@ def fetch_all(
     javascript=True,  # Add JavaScript option
     disable_images=False,  # Add option to disable images
     iframe_name=None,
+    login_dict=None,
 ):  # Add option to handle iframe):  # lxml is faster, # parser="html.parser"
     try:
         # # Generate a random user-agent string
@@ -298,9 +396,34 @@ def fetch_all(
                 prefs = {"profile.managed_default_content_settings.images": 2}
                 chrome_options.add_experimental_option("prefs", prefs)
             # chrome_options.page_load_strategy = capability
+
             service = Service(ChromeDriverManager().install())
+            # driver_path='/Users/macjianfeng/.wdm/drivers/chromedriver/mac64/127.0.6533.119/chromedriver-mac-arm64/chromedriver'
+            # service=Service(executable_path=driver_path)
 
             driver_ = webdriver.Chrome(service=service, options=chrome_options)
+
+            # 隐式等等待
+            if 3 < wait < 5:
+                wait_ = random.uniform(3, 5)
+            elif 5 <= wait < 8:
+                wait_ = random.uniform(5, 8)
+            elif 8 <= wait < 12:
+                wait_ = random.uniform(8, 10)
+            else:
+                wait_ = 0
+            driver_.implicitly_wait(wait_)
+
+            if wait_until is not None and wait_until_kind is not None:
+                strategy = corr_by_kind(wait_until_kind)
+                WebDriverWait(driver_, timeout).until(
+                    EC.presence_of_element_located((strategy, wait_until))
+                )
+            if login_url and login_dict:
+                cookies = get_cookies(url=login_url, login=login_dict)
+                driver_.get(url)
+                for cookie_name, cookie_value in cookies.items():
+                    driver_.add_cookie({"name": cookie_name, "value": cookie_value})
 
             if not javascript:
                 driver_.execute_cdp_cmd(
@@ -330,10 +453,23 @@ def fetch_all(
             # WebDriverWait(driver, timeout).until(
             #     EC.presence_of_element_located((by, where))
             # )
-            page_source = driver_.page_source
+
+            # # scroll down the page by a certain number of pixels
+            scroll_smth_steps(driver_)
+
+            # 设置轮询
+            for attempt in range(scroll_try):
+                page_source = driver_.page_source
+                content = BeautifulSoup(page_source, "html.parser")
+                if content and content.find_all(by):
+                    break
+                sleep(
+                    random.uniform(2, 4)
+                )  # Wait for a random time before polling again
+
             driver_.quit()
 
-            content = BeautifulSoup(page_source, "html.parser")
+            # content = BeautifulSoup(page_source, "html.parser")
             if content:
                 return "text/html", content
             else:
@@ -627,13 +763,17 @@ def downloader(
             else:
                 file_links = []
                 print("No files detected")
-        file_links_all.extend(file_links)
+        if isinstance(file_links, str):
+            file_links_all = [file_links]
+        elif isinstance(file_links, list):
+            file_links_all.extend(file_links)
     if dir_save:
         if rm_folder:
             ips.rm_folder(dir_save)
-        if verbose:
-            print(f"\n... attempting to download to local\n")
+        # if verbose:
+        #     print(f"\n... attempting to download to local\n")
         fnames = [file_link.split("/")[-1] for file_link in file_links_all]
+
         for idx, file_link in enumerate(file_links_all):
             headers = {"User-Agent": user_agent()}
             itry = 0  # Retry logic with exception handling
@@ -647,6 +787,9 @@ def downloader(
                         ext = next(
                             (ftype for ftype in kind if ftype in file_link), None
                         )
+                        if ext is None:
+                            ext = kind_
+                        print("ehereerere", ext)
                         if ext:
                             corrected_fname = fname_corrector(fnames[idx], ext)
                             corrected_fname = check_and_modify_filename(
@@ -673,6 +816,7 @@ def downloader(
                             print(
                                 f"Failed to download file: HTTP status code {response.status_code}"
                             )
+                        break
                 except (ChunkedEncodingError, ConnectionError) as e:
                     print(f"Attempt {itry+1} failed: {e}. Retrying in a few seconds...")
                     # time.sleep(random.uniform(0, 2))  # Random sleep to mitigate server issues
@@ -683,13 +827,13 @@ def downloader(
             if itry == n_try:
                 print(f"Failed to download {file_link} after {n_try} attempts.")
 
-        print(f"\n{len(fnames)} files were downloaded:")
+        # print(f"\n{len(fnames)} files were downloaded:")
         if verbose:
             if corrected_fname:
                 pp(corrected_fname)
+                print(f"\n\nsaved @:\n{dir_save}")
             else:
                 pp(fnames)
-            print(f"\n\nsaved @:\n{dir_save}")
 
 
 def find_img(url, driver="request", dir_save="images", rm_folder=False, verbose=True):
@@ -1303,6 +1447,7 @@ def search(
     verbose=False,
     download=False,
     dir_save=dir_save,
+    **kwargs,
 ):
 
     if "te" in kind.lower():
@@ -1313,7 +1458,9 @@ def search(
         print(f'searching "{query}": got the results below\n{res}')
     if download:
         try:
-            downloader(url=res.links.tolist(), dir_save=dir_save, verbose=verbose)
+            downloader(
+                url=res.links.tolist(), dir_save=dir_save, verbose=verbose, **kwargs
+            )
         except:
             if verbose:
                 print(f"failed link")

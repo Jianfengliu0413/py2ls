@@ -160,10 +160,10 @@ def search(
     kind="text",
     output="df",
     verbose=False,
-    download=True,
+    download=False,
     dir_save=dir_save,
+    **kwargs,
 ):
-    from duckduckgo_search import DDGS
 
     if "te" in kind.lower():
         results = DDGS().text(query, max_results=limit)
@@ -173,8 +173,8 @@ def search(
         print(f'searching "{query}": got the results below\n{res}')
     if download:
         try:
-            netfinder.downloader(
-                url=res.links.tolist(), dir_save=dir_save, verbose=verbose
+            downloader(
+                url=res.links.tolist(), dir_save=dir_save, verbose=verbose, **kwargs
             )
         except:
             if verbose:
@@ -1146,6 +1146,7 @@ def fload(fpath, kind=None, **kwargs):
         "spider",
         "tga",
         "tiff",
+        "tif",
         "webp",
         "json",
     ]
@@ -2067,223 +2068,391 @@ def apply_filter(img, *args):
         return img.filter(supported_filters[filter_name])
 
 
-# def imgsetss(
-#     img,
-#     sets=None,
-#     show=True,
-#     show_axis=False,
-#     size=None,
-#     dpi=100,
-#     figsize=None,
-#     auto=False,
-#     filter_kws=None,
-# ):
-#     """
-#     Apply various enhancements and filters to an image using PIL's ImageEnhance and ImageFilter modules.
+def imgsetss(
+    img,
+    sets=None,
+    show=True,
+    show_axis=False,
+    size=None,
+    dpi=100,
+    figsize=None,
+    auto=False,
+    filter_kws=None,
+):
+    """
+    Apply various enhancements and filters to an image using PIL's ImageEnhance and ImageFilter modules.
 
-#     Args:
-#         img (PIL.Image): The input image.
-#         sets (dict): A dictionary specifying the enhancements, filters, and their parameters.
-#         show (bool): Whether to display the enhanced image.
-#         show_axis (bool): Whether to display axes on the image plot.
-#         size (tuple): The size of the thumbnail, cover, contain, or fit operation.
-#         dpi (int): Dots per inch for the displayed image.
-#         figsize (tuple): The size of the figure for displaying the image.
-#         auto (bool): Whether to automatically enhance the image based on its characteristics.
+    Args:
+        img (PIL.Image): The input image.
+        sets (dict): A dictionary specifying the enhancements, filters, and their parameters.
+        show (bool): Whether to display the enhanced image.
+        show_axis (bool): Whether to display axes on the image plot.
+        size (tuple): The size of the thumbnail, cover, contain, or fit operation.
+        dpi (int): Dots per inch for the displayed image.
+        figsize (tuple): The size of the figure for displaying the image.
+        auto (bool): Whether to automatically enhance the image based on its characteristics.
 
-#     Returns:
-#         PIL.Image: The enhanced image.
+    Returns:
+        PIL.Image: The enhanced image.
 
-#     Supported enhancements and filters:
-#         - "sharpness": Adjusts the sharpness of the image. Values > 1 increase sharpness, while values < 1 decrease sharpness.
-#         - "contrast": Adjusts the contrast of the image. Values > 1 increase contrast, while values < 1 decrease contrast.
-#         - "brightness": Adjusts the brightness of the image. Values > 1 increase brightness, while values < 1 decrease brightness.
-#         - "color": Adjusts the color saturation of the image. Values > 1 increase saturation, while values < 1 decrease saturation.
-#         - "rotate": Rotates the image by the specified angle.
-#         - "crop" or "cut": Crops the image. The value should be a tuple specifying the crop box as (left, upper, right, lower).
-#         - "size": Resizes the image to the specified dimensions.
-#         - "thumbnail": Resizes the image to fit within the given size while preserving aspect ratio.
-#         - "cover": Resizes and crops the image to fill the specified size.
-#         - "contain": Resizes the image to fit within the specified size, adding borders if necessary.
-#         - "fit": Resizes and pads the image to fit within the specified size.
-#         - "filter": Applies various filters to the image (e.g., BLUR, CONTOUR, EDGE_ENHANCE).
+    Supported enhancements and filters:
+        - "sharpness": Adjusts the sharpness of the image. Values > 1 increase sharpness, while values < 1 decrease sharpness.
+        - "contrast": Adjusts the contrast of the image. Values > 1 increase contrast, while values < 1 decrease contrast.
+        - "brightness": Adjusts the brightness of the image. Values > 1 increase brightness, while values < 1 decrease brightness.
+        - "color": Adjusts the color saturation of the image. Values > 1 increase saturation, while values < 1 decrease saturation.
+        - "rotate": Rotates the image by the specified angle.
+        - "crop" or "cut": Crops the image. The value should be a tuple specifying the crop box as (left, upper, right, lower).
+        - "size": Resizes the image to the specified dimensions.
+        - "thumbnail": Resizes the image to fit within the given size while preserving aspect ratio.
+        - "cover": Resizes and crops the image to fill the specified size.
+        - "contain": Resizes the image to fit within the specified size, adding borders if necessary.
+        - "fit": Resizes and pads the image to fit within the specified size.
+        - "filter": Applies various filters to the image (e.g., BLUR, CONTOUR, EDGE_ENHANCE).
 
-#     Note:
-#         The "color" and "enhance" enhancements are not implemented in this function.
-#     """
-#     supported_filters = [
-#                 "BLUR",
-#                 "CONTOUR",
-#                 "DETAIL",
-#                 "EDGE_ENHANCE",
-#                 "EDGE_ENHANCE_MORE",
-#                 "EMBOSS",
-#                 "FIND_EDGES",
-#                 "SHARPEN",
-#                 "SMOOTH",
-#                 "SMOOTH_MORE",
-#                 "MIN_FILTER",
-#                 "MAX_FILTER",
-#                 "MODE_FILTER",
-#                 "MULTIBAND_FILTER",
-#                 "GAUSSIAN_BLUR",
-#                 "BOX_BLUR",
-#                 "MEDIAN_FILTER",
-#             ]
-#     print("sets: a dict,'sharp:1.2','color','contrast:'auto' or 1.2','bright', 'crop: x_upperleft,y_upperleft, x_lowerright, y_lowerright','rotation','resize','rem or background'")
-#     print(f"usage: filter_kws 'dict' below:")
-#     pp([str(i).lower() for i in supported_filters])
-#     print("\nlog:\n")
-#     def confirm_rembg_models(model_name):
-#         models_support = [
-#             "u2net",
-#             "u2netp",
-#             "u2net_human_seg",
-#             "u2net_cloth_seg",
-#             "silueta",
-#             "isnet-general-use",
-#             "isnet-anime",
-#             "sam",
-#         ]
-#         if model_name in models_support:
-#             print(f"model_name: {model_name}")
-#             return model_name
-#         else:
-#             print(f"{model_name} cannot be found, check the name:{models_support}, default('isnet-general-use') has been used")
-#             return "isnet-general-use"
-#     def auto_enhance(img):
-#         """
-#         Automatically enhances the image based on its characteristics.
-#         Args:
-#             img (PIL.Image): The input image.
-#         Returns:
-#             dict: A dictionary containing the optimal enhancement values.
-#         """
-#         # Determine the bit depth based on the image mode
-#         if img.mode in ["1", "L", "P", "RGB", "YCbCr", "LAB", "HSV"]:
-#             # 8-bit depth per channel
-#             bit_depth = 8
-#         elif img.mode in ["RGBA", "CMYK"]:
-#             # 8-bit depth per channel + alpha (RGBA) or additional channels (CMYK)
-#             bit_depth = 8
-#         elif img.mode in ["I", "F"]:
-#             # 16-bit depth per channel (integer or floating-point)
-#             bit_depth = 16
-#         else:
-#             raise ValueError("Unsupported image mode")
-#         # Calculate the brightness and contrast for each channel
-#         num_channels = len(img.getbands())
-#         brightness_factors = []
-#         contrast_factors = []
-#         for channel in range(num_channels):
-#             channel_histogram = img.split()[channel].histogram()
-#             brightness = sum(i * w for i, w in enumerate(channel_histogram))/sum(channel_histogram)
-#             channel_min, channel_max = img.split()[channel].getextrema()
-#             contrast = channel_max - channel_min
-#             # Adjust calculations based on bit depth
-#             normalization_factor = 2**bit_depth - 1  # Max value for the given bit depth
-#             brightness_factor = (1.0 + (brightness - normalization_factor / 2) / normalization_factor)
-#             contrast_factor = (1.0 + (contrast - normalization_factor / 2) / normalization_factor)
-#             brightness_factors.append(brightness_factor)
-#             contrast_factors.append(contrast_factor)
-#         # Calculate the average brightness and contrast factors across channels
-#         avg_brightness_factor = sum(brightness_factors) / num_channels
-#         avg_contrast_factor = sum(contrast_factors) / num_channels
-#         return {"brightness": avg_brightness_factor, "contrast": avg_contrast_factor}
-#     # Load image if input is a file path
-#     if isinstance(img, str):
-#         img = load_img(img)
-#     img_update = img.copy()
-#     # Auto-enhance image if requested
-#     if auto:
-#         auto_params = auto_enhance(img_update)
-#         sets.update(auto_params)
-#     if sets is None:
-#         sets = {}
-#     for k, value in sets.items():
-#         if "shar" in k.lower():
-#             enhancer = ImageEnhance.Sharpness(img_update)
-#             img_update = enhancer.enhance(value)
-#         elif "col" in k.lower() and 'bg' not in k.lower():
-#             enhancer = ImageEnhance.Color(img_update)
-#             img_update = enhancer.enhance(value)
-#         elif "contr" in k.lower():
-#             if value and isinstance(value,(float,int)):
-#                 enhancer = ImageEnhance.Contrast(img_update)
-#                 img_update = enhancer.enhance(value)
-#             else:
-#                 print('autocontrasted')
-#                 img_update = ImageOps.autocontrast(img_update)
-#         elif "bri" in k.lower():
-#             enhancer = ImageEnhance.Brightness(img_update)
-#             img_update = enhancer.enhance(value)
-#         elif "cro" in k.lower() or "cut" in k.lower():
-#             img_update=img_update.crop(value)
-#         elif "rota" in k.lower():
-#             img_update = img_update.rotate(value)
-#         elif "si" in k.lower():
-#             img_update = img_update.resize(value)
-#         elif "thum" in k.lower():
-#             img_update.thumbnail(value)
-#         elif "cover" in k.lower():
-#             img_update = ImageOps.cover(img_update, size=value)
-#         elif "contain" in k.lower():
-#             img_update = ImageOps.contain(img_update, size=value)
-#         elif "fit" in k.lower():
-#             img_update = ImageOps.fit(img_update, size=value)
-#         elif "pad" in k.lower():
-#             img_update = ImageOps.pad(img_update, size=value)
-#         elif 'rem' in k.lower() or 'rm' in k.lower() or 'back' in k.lower():
-#             if value and isinstance(value,(int,float,list)):
-#                 print('example usage: {"rm":[alpha_matting_background_threshold(20),alpha_matting_foreground_threshold(270),alpha_matting_erode_sive(11)]}')
-#                 print("https://github.com/danielgatis/rembg/blob/main/USAGE.md")
-#                 #     ###            Parameters:
-#                 #         data (Union[bytes, PILImage, np.ndarray]): The input image data.
-#                 #         alpha_matting (bool, optional): Flag indicating whether to use alpha matting. Defaults to False.
-#                 #         alpha_matting_foreground_threshold (int, optional): Foreground threshold for alpha matting. Defaults to 240.
-#                 #         alpha_matting_background_threshold (int, optional): Background threshold for alpha matting. Defaults to 10.
-#                 #         alpha_matting_erode_size (int, optional): Erosion size for alpha matting. Defaults to 10.
-#                 #         session (Optional[BaseSession], optional): A session object for the 'u2net' model. Defaults to None.
-#                 #         only_mask (bool, optional): Flag indicating whether to return only the binary masks. Defaults to False.
-#                 #         post_process_mask (bool, optional): Flag indicating whether to post-process the masks. Defaults to False.
-#                 #         bgcolor (Optional[Tuple[int, int, int, int]], optional): Background color for the cutout image. Defaults to None.
-#                 #  ###
-#                 if isinstance(value,int):
-#                     value=[value]
-#                 if len(value) <2:
-#                     img_update = remove(img_update,alpha_matting=True,alpha_matting_background_threshold=value)
-#                 elif 2<=len(value)<3:
-#                     img_update = remove(img_update,alpha_matting=True,alpha_matting_background_threshold=value[0],alpha_matting_foreground_threshold=value[1])
-#                 elif 3<=len(value)<4:
-#                     img_update = remove(img_update,alpha_matting=True,alpha_matting_background_threshold=value[0],alpha_matting_foreground_threshold=value[1],alpha_matting_erode_size=value[2])
-#             if isinstance(value,tuple): # replace the background color
-#                 if len(value)==3:
-#                     value+=(255,)
-#                 img_update = remove(img_update, bgcolor=value)
-#             if isinstance(value,str):
-#                 if confirm_rembg_models(value):
-#                     img_update=remove(img_update,session=new_session(value))
-#                 else:
-#                     img_update=remove(img_update)
-#         elif 'bgcolor' in k.lower():
-#             if isinstance(value,list):
-#                 value=tuple(value)
-#             if isinstance(value,tuple): # replace the background color
-#                 if len(value)==3:
-#                     value+=(255,)
-#                 img_update = remove(img_update, bgcolor=value)
-#     if filter_kws:
-#         for filter_name, filter_value in filter_kws.items():
-#             img_update = apply_filter(img_update, filter_name, filter_value)
-#     # Display the image if requested
-#     if show:
-#         if figsize is None:
-#             plt.figure(dpi=dpi)
-#         else:
-#             plt.figure(figsize=figsize, dpi=dpi)
-#         plt.imshow(img_update)
-#         plt.axis("on") if show_axis else plt.axis("off")
-#     return img_update
+    Note:
+        The "color" and "enhance" enhancements are not implemented in this function.
+    """
+    supported_filters = [
+        "BLUR",
+        "CONTOUR",
+        "DETAIL",
+        "EDGE_ENHANCE",
+        "EDGE_ENHANCE_MORE",
+        "EMBOSS",
+        "FIND_EDGES",
+        "SHARPEN",
+        "SMOOTH",
+        "SMOOTH_MORE",
+        "MIN_FILTER",
+        "MAX_FILTER",
+        "MODE_FILTER",
+        "MULTIBAND_FILTER",
+        "GAUSSIAN_BLUR",
+        "BOX_BLUR",
+        "MEDIAN_FILTER",
+    ]
+    print(
+        "sets: a dict,'sharp:1.2','color','contrast:'auto' or 1.2','bright', 'crop: x_upperleft,y_upperleft, x_lowerright, y_lowerright','rotation','resize','rem or background'"
+    )
+    print(f"usage: filter_kws 'dict' below:")
+    pp([str(i).lower() for i in supported_filters])
+    print("\nlog:\n")
+
+    def confirm_rembg_models(model_name):
+        models_support = [
+            "u2net",
+            "u2netp",
+            "u2net_human_seg",
+            "u2net_cloth_seg",
+            "silueta",
+            "isnet-general-use",
+            "isnet-anime",
+            "sam",
+        ]
+        if model_name in models_support:
+            print(f"model_name: {model_name}")
+            return model_name
+        else:
+            print(
+                f"{model_name} cannot be found, check the name:{models_support}, default('isnet-general-use') has been used"
+            )
+            return "isnet-general-use"
+
+    def auto_enhance(img):
+        """
+        Automatically enhances the image based on its characteristics.
+        Args:
+            img (PIL.Image): The input image.
+        Returns:
+            dict: A dictionary containing the optimal enhancement values.
+        """
+        # Determine the bit depth based on the image mode
+        if img.mode in ["1", "L", "P", "RGB", "YCbCr", "LAB", "HSV"]:
+            # 8-bit depth per channel
+            bit_depth = 8
+        elif img.mode in ["RGBA", "CMYK"]:
+            # 8-bit depth per channel + alpha (RGBA) or additional channels (CMYK)
+            bit_depth = 8
+        elif img.mode in ["I", "F"]:
+            # 16-bit depth per channel (integer or floating-point)
+            bit_depth = 16
+        else:
+            raise ValueError("Unsupported image mode")
+        # Calculate the brightness and contrast for each channel
+        num_channels = len(img.getbands())
+        brightness_factors = []
+        contrast_factors = []
+        for channel in range(num_channels):
+            channel_histogram = img.split()[channel].histogram()
+            brightness = sum(i * w for i, w in enumerate(channel_histogram)) / sum(
+                channel_histogram
+            )
+            channel_min, channel_max = img.split()[channel].getextrema()
+            contrast = channel_max - channel_min
+            # Adjust calculations based on bit depth
+            normalization_factor = 2**bit_depth - 1  # Max value for the given bit depth
+            brightness_factor = (
+                1.0 + (brightness - normalization_factor / 2) / normalization_factor
+            )
+            contrast_factor = (
+                1.0 + (contrast - normalization_factor / 2) / normalization_factor
+            )
+            brightness_factors.append(brightness_factor)
+            contrast_factors.append(contrast_factor)
+        # Calculate the average brightness and contrast factors across channels
+        avg_brightness_factor = sum(brightness_factors) / num_channels
+        avg_contrast_factor = sum(contrast_factors) / num_channels
+        return {"brightness": avg_brightness_factor, "contrast": avg_contrast_factor}
+
+    # Load image if input is a file path
+    if isinstance(img, str):
+        img = load_img(img)
+    img_update = img.copy()
+    # Auto-enhance image if requested
+    if auto:
+        auto_params = auto_enhance(img_update)
+        sets.update(auto_params)
+    if sets is None:
+        sets = {}
+    for k, value in sets.items():
+        if "shar" in k.lower():
+            enhancer = ImageEnhance.Sharpness(img_update)
+            img_update = enhancer.enhance(value)
+        elif "col" in k.lower() and "bg" not in k.lower():
+            enhancer = ImageEnhance.Color(img_update)
+            img_update = enhancer.enhance(value)
+        elif "contr" in k.lower():
+            if value and isinstance(value, (float, int)):
+                enhancer = ImageEnhance.Contrast(img_update)
+                img_update = enhancer.enhance(value)
+            else:
+                print("autocontrasted")
+                img_update = ImageOps.autocontrast(img_update)
+        elif "bri" in k.lower():
+            enhancer = ImageEnhance.Brightness(img_update)
+            img_update = enhancer.enhance(value)
+        elif "cro" in k.lower() or "cut" in k.lower():
+            img_update = img_update.crop(value)
+        elif "rota" in k.lower():
+            img_update = img_update.rotate(value)
+        elif "si" in k.lower():
+            img_update = img_update.resize(value)
+        elif "thum" in k.lower():
+            img_update.thumbnail(value)
+        elif "cover" in k.lower():
+            img_update = ImageOps.cover(img_update, size=value)
+        elif "contain" in k.lower():
+            img_update = ImageOps.contain(img_update, size=value)
+        elif "fit" in k.lower():
+            img_update = ImageOps.fit(img_update, size=value)
+        elif "pad" in k.lower():
+            img_update = ImageOps.pad(img_update, size=value)
+        elif "rem" in k.lower() or "rm" in k.lower() or "back" in k.lower():
+            if value and isinstance(value, (int, float, list)):
+                print(
+                    'example usage: {"rm":[alpha_matting_background_threshold(20),alpha_matting_foreground_threshold(270),alpha_matting_erode_sive(11)]}'
+                )
+                print("https://github.com/danielgatis/rembg/blob/main/USAGE.md")
+                #     ###            Parameters:
+                #         data (Union[bytes, PILImage, np.ndarray]): The input image data.
+                #         alpha_matting (bool, optional): Flag indicating whether to use alpha matting. Defaults to False.
+                #         alpha_matting_foreground_threshold (int, optional): Foreground threshold for alpha matting. Defaults to 240.
+                #         alpha_matting_background_threshold (int, optional): Background threshold for alpha matting. Defaults to 10.
+                #         alpha_matting_erode_size (int, optional): Erosion size for alpha matting. Defaults to 10.
+                #         session (Optional[BaseSession], optional): A session object for the 'u2net' model. Defaults to None.
+                #         only_mask (bool, optional): Flag indicating whether to return only the binary masks. Defaults to False.
+                #         post_process_mask (bool, optional): Flag indicating whether to post-process the masks. Defaults to False.
+                #         bgcolor (Optional[Tuple[int, int, int, int]], optional): Background color for the cutout image. Defaults to None.
+                #  ###
+                if isinstance(value, int):
+                    value = [value]
+                if len(value) < 2:
+                    img_update = remove(
+                        img_update,
+                        alpha_matting=True,
+                        alpha_matting_background_threshold=value,
+                    )
+                elif 2 <= len(value) < 3:
+                    img_update = remove(
+                        img_update,
+                        alpha_matting=True,
+                        alpha_matting_background_threshold=value[0],
+                        alpha_matting_foreground_threshold=value[1],
+                    )
+                elif 3 <= len(value) < 4:
+                    img_update = remove(
+                        img_update,
+                        alpha_matting=True,
+                        alpha_matting_background_threshold=value[0],
+                        alpha_matting_foreground_threshold=value[1],
+                        alpha_matting_erode_size=value[2],
+                    )
+            if isinstance(value, tuple):  # replace the background color
+                if len(value) == 3:
+                    value += (255,)
+                img_update = remove(img_update, bgcolor=value)
+            if isinstance(value, str):
+                if confirm_rembg_models(value):
+                    img_update = remove(img_update, session=new_session(value))
+                else:
+                    img_update = remove(img_update)
+        elif "bgcolor" in k.lower():
+            if isinstance(value, list):
+                value = tuple(value)
+            if isinstance(value, tuple):  # replace the background color
+                if len(value) == 3:
+                    value += (255,)
+                img_update = remove(img_update, bgcolor=value)
+    if filter_kws:
+        for filter_name, filter_value in filter_kws.items():
+            img_update = apply_filter(img_update, filter_name, filter_value)
+    # Display the image if requested
+    if show:
+        if figsize is None:
+            plt.figure(dpi=dpi)
+        else:
+            plt.figure(figsize=figsize, dpi=dpi)
+        plt.imshow(img_update)
+        plt.axis("on") if show_axis else plt.axis("off")
+    return img_update
+
+
+from sklearn.decomposition import PCA
+from skimage import transform, feature, filters, measure
+from skimage.color import rgb2gray
+from scipy.fftpack import fftshift, fft2
+import numpy as np
+import cv2  # Used for template matching
+
+
+def crop_black_borders(image):
+    """Crop the black borders from a rotated image."""
+    # Convert the image to grayscale if it's not already
+    if image.ndim == 3:
+        gray_image = color.rgb2gray(image)
+    else:
+        gray_image = image
+
+    # Find all the non-black (non-zero) pixels
+    mask = gray_image > 0  # Mask for non-black pixels (assuming black is zero)
+    coords = np.column_stack(np.where(mask))
+
+    # Get the bounding box of non-black pixels
+    if coords.any():  # Check if there are any non-black pixels
+        y_min, x_min = coords.min(axis=0)
+        y_max, x_max = coords.max(axis=0)
+
+        # Crop the image to the bounding box
+        cropped_image = image[y_min : y_max + 1, x_min : x_max + 1]
+    else:
+        # If the image is completely black (which shouldn't happen), return the original image
+        cropped_image = image
+
+    return cropped_image
+
+
+def detect_angle(image, by="median", template=None):
+    """Detect the angle of rotation using various methods."""
+    # Convert to grayscale
+    gray_image = rgb2gray(image)
+
+    # Detect edges using Canny edge detector
+    edges = feature.canny(gray_image, sigma=2)
+
+    # Use Hough transform to detect lines
+    lines = transform.probabilistic_hough_line(edges)
+
+    if not lines and any(["me" in by, "pca" in by]):
+        print("No lines detected. Adjust the edge detection parameters.")
+        return 0
+
+    # Hough Transform-based angle detection (Median/Mean)
+    if "me" in by:
+        angles = []
+        for line in lines:
+            (x0, y0), (x1, y1) = line
+            angle = np.arctan2(y1 - y0, x1 - x0) * 180 / np.pi
+            if 80 < abs(angle) < 100:
+                angles.append(angle)
+        if not angles:
+            return 0
+        if "di" in by:
+            median_angle = np.median(angles)
+            rotation_angle = (
+                90 - median_angle if median_angle > 0 else -90 - median_angle
+            )
+
+            return rotation_angle
+        else:
+            mean_angle = np.mean(angles)
+            rotation_angle = 90 - mean_angle if mean_angle > 0 else -90 - mean_angle
+
+            return rotation_angle
+
+    # PCA-based angle detection
+    elif "pca" in by:
+        y, x = np.nonzero(edges)
+        if len(x) == 0:
+            return 0
+        pca = PCA(n_components=2)
+        pca.fit(np.vstack((x, y)).T)
+        angle = np.arctan2(pca.components_[0, 1], pca.components_[0, 0]) * 180 / np.pi
+        return angle
+
+    # Gradient Orientation-based angle detection
+    elif "gra" in by:
+        gx, gy = np.gradient(gray_image)
+        angles = np.arctan2(gy, gx) * 180 / np.pi
+        hist, bin_edges = np.histogram(angles, bins=360, range=(-180, 180))
+        return bin_edges[np.argmax(hist)]
+
+    # Template Matching-based angle detection
+    elif "temp" in by:
+        if template is None:
+            # Automatically extract a template from the center of the image
+            height, width = gray_image.shape
+            center_x, center_y = width // 2, height // 2
+            size = (
+                min(height, width) // 4
+            )  # Size of the template as a fraction of image size
+            template = gray_image[
+                center_y - size : center_y + size, center_x - size : center_x + size
+            ]
+        best_angle = None
+        best_corr = -1
+        for angle in range(0, 180, 1):  # Checking every degree
+            rotated_template = transform.rotate(template, angle)
+            res = cv2.matchTemplate(gray_image, rotated_template, cv2.TM_CCOEFF)
+            _, max_val, _, _ = cv2.minMaxLoc(res)
+            if max_val > best_corr:
+                best_corr = max_val
+                best_angle = angle
+        return best_angle
+
+    # Image Moments-based angle detection
+    elif "mo" in by:
+        moments = measure.moments_central(gray_image)
+        angle = (
+            0.5
+            * np.arctan2(2 * moments[1, 1], moments[0, 2] - moments[2, 0])
+            * 180
+            / np.pi
+        )
+        return angle
+
+    # Fourier Transform-based angle detection
+    elif "fft" in by:
+        f = fft2(gray_image)
+        fshift = fftshift(f)
+        magnitude_spectrum = np.log(np.abs(fshift) + 1)
+        rows, cols = magnitude_spectrum.shape
+        r, c = np.unravel_index(np.argmax(magnitude_spectrum), (rows, cols))
+        angle = np.arctan2(r - rows // 2, c - cols // 2) * 180 / np.pi
+        return angle
+
+    else:
+        print(f"Unknown method {by}")
+        return 0
 
 
 def imgsets(img, **kwargs):
@@ -2444,7 +2613,11 @@ def imgsets(img, **kwargs):
         elif "cro" in k.lower() or "cut" in k.lower():
             img_update = img_update.crop(value)
         elif "rota" in k.lower():
+            if isinstance(value, str):
+                value = detect_angle(img_update, by=value)
+                print(f"rotated by {value}°")
             img_update = img_update.rotate(value)
+
         elif "si" in k.lower():
             img_update = img_update.resize(value)
         elif "thum" in k.lower():

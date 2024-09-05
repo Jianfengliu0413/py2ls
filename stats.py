@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 # FuncStars --v 0.1.1
 def FuncStars(
-    ax,
+    ax=None,
     pval=None,
     ylim=None,
     xlim=None,
@@ -33,10 +33,11 @@ def FuncStars(
     linewidth=0.8,
     nsshow="off",
     symbolcolor="k",
-    tailindicator=[0.06, 0.06],
+    tailindicator=[0.05, 0.05],
     report=None,
     report_scale=-0.1,
     report_loc=None,
+    **kwargs
 ):
     if ax is None:
         ax = plt.gca()
@@ -52,140 +53,140 @@ def FuncStars(
     if y_loc is None:
         y_loc = np.min(ylim) + yscale * (np.max(ylim) - np.min(ylim))
     else:
-        y_loc = y_loc + 0.1 * (np.max(ylim) - np.min(ylim))
+        y_loc=y_loc+(1-yscale) * np.abs(np.diff(ylim))+0.1 *y_loc
     xcenter = np.mean([x1, x2])
-
-    # ns / *
-    if alpha < pval:
-        if nsshow == "on":
-            ns_str = f"p={round(pval, 3)}" if pval < 0.9 else "ns"
-            color = "m" if pval < 0.1 else "k"
-            plt.text(
+    if pval is not None:
+        # ns / *
+        if alpha < pval:
+            if nsshow == "on":
+                ns_str = f"p={round(pval, 3)}" if pval < 0.9 else "ns"
+                color = "m" if pval < 0.1 else "k"
+                ax.text(
+                    xcenter,
+                    y_loc,
+                    ns_str,
+                    ha="center",
+                    va="bottom",  # 'center_baseline',
+                    fontsize=fontsize - 6 if fontsize > 6 else fontsize,
+                    fontname=fontname,
+                    color=color,
+                    rotation=rotation,
+                    # bbox=dict(facecolor=None, edgecolor=None, color=None, linewidth=None)
+                )
+        elif 0.01 < pval <= alpha:
+            ax.text(
                 xcenter,
                 y_loc,
-                ns_str,
+                symbol,
                 ha="center",
-                va="bottom",  # 'center_baseline',
-                fontsize=fontsize - 6 if fontsize > 6 else fontsize,
+                va="top",#"center_baseline",
+                fontsize=fontsize,
                 fontname=fontname,
-                color=color,
-                rotation=rotation,
-                # bbox=dict(facecolor=None, edgecolor=None, color=None, linewidth=None)
+                color=symbolcolor,
             )
-    elif 0.01 < pval <= alpha:
-        plt.text(
-            xcenter,
-            y_loc,
-            symbol,
-            ha="center",
-            va="center_baseline",
-            fontsize=fontsize,
-            fontname=fontname,
-            color=symbolcolor,
-        )
-    elif 0.001 < pval <= 0.01:
-        plt.text(
-            xcenter,
-            y_loc,
-            symbol * 2,
-            ha="center",
-            va="center_baseline",
-            fontsize=fontsize,
-            fontname=fontname,
-            color=symbolcolor,
-        )
-    elif 0 < pval <= 0.001:
-        plt.text(
-            xcenter,
-            y_loc,
-            symbol * 3,
-            ha="center",
-            va="center_baseline",
-            fontsize=fontsize,
-            fontname=fontname,
-            color=symbolcolor,
-        )
-    # lines indicators
-    if linego and 0 < pval <= 0.05:
-        # horizontal line
-        if yscale <= 0.99:
-            plt.plot(
-                [x1 + np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
-                [
-                    y_loc - np.abs(np.diff(ylim)) * 0.03,
-                    y_loc - np.abs(np.diff(ylim)) * 0.03,
-                ],
-                linestyle=linestyle,
-                color=linecolor,
-                linewidth=linewidth,
+        elif 0.001 < pval <= 0.01:
+            ax.text(
+                xcenter,
+                y_loc,
+                symbol * 2,
+                ha="center",
+                va="top",#"center_baseline",
+                fontsize=fontsize,
+                fontname=fontname,
+                color=symbolcolor,
             )
-            # vertical line
-            plt.plot(
-                [x1 + np.abs(np.diff(xlim)) * 0.01, x1 + np.abs(np.diff(xlim)) * 0.01],
-                [
-                    y_loc - np.abs(np.diff(ylim)) * tailindicator[0],
-                    y_loc - np.abs(np.diff(ylim)) * 0.03,
-                ],
-                linestyle=linestyle,
-                color=linecolor,
-                linewidth=linewidth,
+        elif 0 < pval <= 0.001:
+            ax.text(
+                xcenter,
+                y_loc,
+                symbol * 3,
+                ha="center",
+                va="top",#"center_baseline",
+                fontsize=fontsize,
+                fontname=fontname,
+                color=symbolcolor,
             )
-            plt.plot(
-                [x2 - np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
-                [
-                    y_loc - np.abs(np.diff(ylim)) * tailindicator[1],
-                    y_loc - np.abs(np.diff(ylim)) * 0.03,
-                ],
-                linestyle=linestyle,
-                color=linecolor,
-                linewidth=linewidth,
-            )
-        else:
-            plt.plot(
-                [x1 + np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
-                [
-                    np.min(ylim)
-                    + 0.95 * (np.max(ylim) - np.min(ylim))
-                    - np.abs(np.diff(ylim)) * 0.002,
-                    np.min(ylim)
-                    + 0.95 * (np.max(ylim) - np.min(ylim))
-                    - np.abs(np.diff(ylim)) * 0.002,
-                ],
-                linestyle=linestyle,
-                color=linecolor,
-                linewidth=linewidth,
-            )
-            # vertical line
-            plt.plot(
-                [x1 + np.abs(np.diff(xlim)) * 0.01, x1 + np.abs(np.diff(xlim)) * 0.01],
-                [
-                    np.min(ylim)
-                    + 0.95 * (np.max(ylim) - np.min(ylim))
-                    - np.abs(np.diff(ylim)) * tailindicator[0],
-                    np.min(ylim)
-                    + 0.95 * (np.max(ylim) - np.min(ylim))
-                    - np.abs(np.diff(ylim)) * 0.002,
-                ],
-                linestyle=linestyle,
-                color=linecolor,
-                linewidth=linewidth,
-            )
-            plt.plot(
-                [x2 - np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
-                [
-                    np.min(ylim)
-                    + 0.95 * (np.max(ylim) - np.min(ylim))
-                    - np.abs(np.diff(ylim)) * tailindicator[1],
-                    np.min(ylim)
-                    + 0.95 * (np.max(ylim) - np.min(ylim))
-                    - np.abs(np.diff(ylim)) * 0.002,
-                ],
-                linestyle=linestyle,
-                color=linecolor,
-                linewidth=linewidth,
-            )
+        # lines indicators
+        if linego and 0 < pval <= 0.05:
+            # horizontal line
+            if yscale <= 0.99:
+                ax.plot(
+                    [x1 + np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
+                    [
+                        y_loc - np.abs(np.diff(ylim)) * 0.03,
+                        y_loc - np.abs(np.diff(ylim)) * 0.03,
+                    ],
+                    linestyle=linestyle,
+                    color=linecolor,
+                    linewidth=linewidth,
+                )
+                # vertical line
+                ax.plot(
+                    [x1 + np.abs(np.diff(xlim)) * 0.01, x1 + np.abs(np.diff(xlim)) * 0.01],
+                    [
+                        y_loc - np.abs(np.diff(ylim)) * tailindicator[0],
+                        y_loc - np.abs(np.diff(ylim)) * 0.03,
+                    ],
+                    linestyle=linestyle,
+                    color=linecolor,
+                    linewidth=linewidth,
+                )
+                ax.plot(
+                    [x2 - np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
+                    [
+                        y_loc - np.abs(np.diff(ylim)) * tailindicator[1],
+                        y_loc - np.abs(np.diff(ylim)) * 0.03,
+                    ],
+                    linestyle=linestyle,
+                    color=linecolor,
+                    linewidth=linewidth,
+                )
+            else:
+                ax.plot(
+                    [x1 + np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
+                    [
+                        np.min(ylim)
+                        + 0.95 * (np.max(ylim) - np.min(ylim))
+                        - np.abs(np.diff(ylim)) * 0.002,
+                        np.min(ylim)
+                        + 0.95 * (np.max(ylim) - np.min(ylim))
+                        - np.abs(np.diff(ylim)) * 0.002,
+                    ],
+                    linestyle=linestyle,
+                    color=linecolor,
+                    linewidth=linewidth,
+                )
+                # vertical line
+                ax.plot(
+                    [x1 + np.abs(np.diff(xlim)) * 0.01, x1 + np.abs(np.diff(xlim)) * 0.01],
+                    [
+                        np.min(ylim)
+                        + 0.95 * (np.max(ylim) - np.min(ylim))
+                        - np.abs(np.diff(ylim)) * tailindicator[0],
+                        np.min(ylim)
+                        + 0.95 * (np.max(ylim) - np.min(ylim))
+                        - np.abs(np.diff(ylim)) * 0.002,
+                    ],
+                    linestyle=linestyle,
+                    color=linecolor,
+                    linewidth=linewidth,
+                )
+                ax.plot(
+                    [x2 - np.abs(np.diff(xlim)) * 0.01, x2 - np.abs(np.diff(xlim)) * 0.01],
+                    [
+                        np.min(ylim)
+                        + 0.95 * (np.max(ylim) - np.min(ylim))
+                        - np.abs(np.diff(ylim)) * tailindicator[1],
+                        np.min(ylim)
+                        + 0.95 * (np.max(ylim) - np.min(ylim))
+                        - np.abs(np.diff(ylim)) * 0.002,
+                    ],
+                    linestyle=linestyle,
+                    color=linecolor,
+                    linewidth=linewidth,
+                )
     if values_below is not None:
-        plt.text(
+        ax.text(
             xcenter,
             y_loc * (-0.1),
             values_below,
@@ -197,7 +198,7 @@ def FuncStars(
         )
     # report / comments
     if report is not None:
-        plt.text(
+        ax.text(
             xcenter,
             report_loc,
             report,
@@ -264,7 +265,7 @@ def FuncCmpt(x1, x2, pmc="auto", pair="unpaired", verbose=True):
                 x1, x2, center="median", proportiontocut=0.05
             )
             VarType = True if pval_lev > 0.05 and nX1 == nX2 else False
-            print(pair)
+            # print(pair)
             if "np" in pair:  # 'unpaired'
                 if VarType and Normality:
                     # The independent t-test requires that the dependent variable is approximately normally
@@ -281,7 +282,7 @@ def FuncCmpt(x1, x2, pmc="auto", pair="unpaired", verbose=True):
                     )
                     notes_stat = "unpaired t test"
                     notes_APA = (
-                        f"t({nX1+nX2-2})={round(stat_value, 5)},p={round(pval, 5)}"
+                        f"t({nX1+nX2-2})={round(stat_value,3)},p={round(pval,3)}"
                     )
                 else:
                     # If the Levene's Test for Equality of Variances is statistically significant,
@@ -300,7 +301,7 @@ def FuncCmpt(x1, x2, pmc="auto", pair="unpaired", verbose=True):
                     notes_stat = "Welchs t-test"
                     # note: APA FORMAT
                     notes_APA = (
-                        f"t({nX1+nX2-2})={round(stat_value, 5)},p={round(pval, 5)}"
+                        f"t({nX1+nX2-2})={round(stat_value,3)},p={round(pval,3)}"
                     )
             elif "pa" in pair and "np" not in pair:  # 'paired'
                 # the paired-samples t-test is considered “robust” in handling violations of normality
@@ -312,7 +313,7 @@ def FuncCmpt(x1, x2, pmc="auto", pair="unpaired", verbose=True):
                 notes_stat = "paired t test"
                 # note: APA FORMAT
                 notes_APA = (
-                    f"t({sum([nX1-1])})={round(stat_value, 5)},p={round(pval, 5)}"
+                    f"t({sum([nX1-1])})={round(stat_value,3)},p={round(pval,3)}"
                 )
         elif cfg_pmc == "non-parametric":
             if "np" in pair:  # Perform Mann-Whitney
@@ -321,18 +322,18 @@ def FuncCmpt(x1, x2, pmc="auto", pair="unpaired", verbose=True):
                 )
                 notes_stat = "Mann-Whitney U"
                 if nX1 == nX2:
-                    notes_APA = f"U(n={nX1})={round(stat_value, 5)},p={round(pval, 5)}"
+                    notes_APA = f"U(n={nX1})={round(stat_value,3)},p={round(pval,3)}"
                 else:
-                    notes_APA = f"U(n1={nX1},n2={nX2})={round(stat_value, 5)},p={round(pval, 5)}"
+                    notes_APA = f"U(n1={nX1},n2={nX2})={round(stat_value,3)},p={round(pval,3)}"
             elif "pa" in pair and "np" not in pair:  # Wilcoxon signed-rank test
                 stat_value, pval = stats.wilcoxon(
                     x1, x2, method="exact", nan_policy="omit"
                 )
                 notes_stat = "Wilcoxon signed-rank"
                 if nX1 == nX2:
-                    notes_APA = f"Z(n={nX1})={round(stat_value, 5)},p={round(pval, 5)}"
+                    notes_APA = f"Z(n={nX1})={round(stat_value,3)},p={round(pval,3)}"
                 else:
-                    notes_APA = f"Z(n1={nX1},n2={nX2})={round(stat_value, 5)},p={round(pval, 5)}"
+                    notes_APA = f"Z(n1={nX1},n2={nX2})={round(stat_value,3)},p={round(pval,3)}"
 
         # filling output
         output["stat"] = stat_value
@@ -386,7 +387,7 @@ def FuncCmpt(x1, x2, pmc="auto", pair="unpaired", verbose=True):
 # =============================================================================
 
 
-def str_mean_sem(data: list, delimit=5):
+def str_mean_sem(data: list, delimit=3):
     mean_ = np.nanmean(data)
     sem_ = np.nanstd(data, ddof=1) / np.sqrt(sum(~np.isnan(data)))
     return str(round(mean_, delimit)) + "±" + str(round(sem_, delimit))
@@ -407,6 +408,7 @@ def FuncMultiCmpt(
     subject=None,
     group=None,
     verbose=True,
+    post_hoc=False
 ):
     if group is None:
         group = factor
@@ -518,12 +520,12 @@ def FuncMultiCmpt(
         if "np" in cfg_pair:  # 'unpaired'
             res_tab = run_kruskal(data, dv, factor)
             notes_stat = f"Non-parametric Kruskal: {data[factor].nunique()} Way ANOVA"
-            notes_APA = f'H({res_tab.ddof1[0]},n={data.shape[0]})={round(res_tab.H[0], 5)},p={round(res_tab["p-unc"][0], 5)}'
+            notes_APA = [f'H({res_tab.ddof1[0]},N={data.shape[0]})={round(res_tab.H[0],3)},p={round(res_tab["p-unc"][0],3)}']
 
         elif "pa" in cfg_pair and "np" not in cfg_pair:  # 'paired'
             res_tab = run_friedman(data, dv, factor, subject, method="chisq")
             notes_stat = f"Non-parametric {data[factor].nunique()} Way Friedman repeated measures ANOVA"
-            notes_APA = f'X^2({res_tab.ddof1[0]})={round(res_tab.Q[0], 5)},p={round(res_tab["p-unc"][0], 5)}'
+            notes_APA = [f'X^2({res_tab.ddof1[0]})={round(res_tab.Q[0],3)},p={round(res_tab["p-unc"][0],3)}']
 
     # =============================================================================
     # # Post-hoc
@@ -538,7 +540,10 @@ def FuncMultiCmpt(
     go_mix_between = None if ("pa" in cfg_pair) or ("np" not in cfg_pair) else factor
     go_mix_within = within if ("mix" in cfg_pair) or ("both" in cfg_pair) else None
     go_mix_within = factor if ("pa" in cfg_pair) or ("np" not in cfg_pair) else None
+
     if res_tab["p-unc"][0] <= 0.05:
+        post_hoc=True
+    if post_hoc:
         # Pairwise Comparisons
         method_post_hoc = [
             "bonf",  # 'bonferroni',  # : one-step correction
@@ -605,7 +610,10 @@ def FuncMultiCmpt(
     #     # filling output
     # =============================================================================
 
-    pd.set_option("display.max_columns", None)
+    pd.set_option('display.max_columns', None)  # Show all columns
+    pd.set_option('display.max_colwidth', None)  # No limit on column width
+    pd.set_option('display.expand_frame_repr', False)  # Prevent line-wrapping
+
     output["stat"] = notes_stat
     # print(output['APA'])
     output["APA"] = notes_APA
@@ -619,21 +627,21 @@ def FuncMultiCmpt(
 def display_output(output: dict):
     if isinstance(output, pd.DataFrame):
         output = output.to_dict(orient="list")
-    # ['res_posthoc', 'stat', 'APA', 'pval', 'res_tab']
-    # res_keys = list(output.keys())
-    # display(res_keys)
+    # ['res_posthoc', 'stat', 'APA', 'pval', 'res_tab'] 
+
+    # ? show APA
+    # print(f"\n\ndisplay stat_output")
+    # try:
+    #     print(f"APA: {output["APA"]}")
+    # except:
+    #     pass
     try:
-        print("APA:")
-        display(output["APA"])
-    except:
-        pass
-    try:
-        print("results table:")
+        print("stats table:  ⤵")
         display(output["res_tab"])
     except:
         pass
     try:
-        print("posthoc:")
+        print(f"APA  ⤵\n{output["APA"][0]}  ⤵\npost-hoc analysis ⤵")
         display(output["res_posthoc"])
     except:
         pass
@@ -695,17 +703,17 @@ def extract_apa(res_tab):
     notes_APA = []
     if "ddof1" in res_tab:
         for irow in range(res_tab.shape[0]):
-            note_tmp = f'{res_tab.Source[irow]}:F{round(res_tab.ddof1[irow]),round(res_tab.ddof2[irow])}={round(res_tab.F[irow], 5)},p={round(res_tab["p-unc"][irow], 5)}'
-            notes_APA.append([note_tmp])
-    elif "DF" in res_tab:
+            note_tmp = f'{res_tab.Source[irow]}:F{round(res_tab.ddof1[irow]),round(res_tab.ddof2[irow])}={round(res_tab.F[irow],3)},p={round(res_tab["p-unc"][irow],3)}'
+            notes_APA.append(note_tmp)
+    elif "DF" in res_tab: 
         for irow in range(res_tab.shape[0] - 1):
-            note_tmp = f'{res_tab.Source[irow]}:F{round(res_tab.DF[irow]),round(res_tab.DF[res_tab.shape[0]-1])}={round(res_tab.F[irow], 5)},p={round(res_tab["p-unc"][irow], 5)}'
-            notes_APA.append([note_tmp])
-        notes_APA.append(["NaN"])
+            note_tmp = f'{res_tab.Source[irow]}:F{round(res_tab.DF[irow]),round(res_tab.DF[res_tab.shape[0]-1])}={round(res_tab.F[irow],3)},p={round(res_tab["p-unc"][irow],3)}'
+            notes_APA.append(note_tmp)
+        notes_APA.append(np.nan)
     elif "DF1" in res_tab:  # in 'mix' case
         for irow in range(res_tab.shape[0]):
-            note_tmp = f'{res_tab.Source[irow]}:F{round(res_tab.DF1[irow]),round(res_tab.DF2[irow])}={round(res_tab.F[irow], 5)},p={round(res_tab["p-unc"][irow], 5)}'
-            notes_APA.append([note_tmp])
+            note_tmp = f'{res_tab.Source[irow]}:F{round(res_tab.DF1[irow]),round(res_tab.DF2[irow])}={round(res_tab.F[irow],3)},p={round(res_tab["p-unc"][irow],3)}'
+            notes_APA.append(note_tmp)
     return notes_APA
 
 
@@ -859,220 +867,7 @@ def df_wide_long(df):
     elif rows > columns:
         return "Long"
 
-
-# =============================================================================
-# # One-way ANOVA
-# =============================================================================
-# url = "http://stats191.stanford.edu/data/rehab.csv"
-# rehab_table = pd.read_table(url, delimiter=",")
-# rehab_table.to_csv("rehab.table")
-# fig, ax = plt.subplots(figsize=(8, 6))
-# fig = rehab_table.boxplot("Time", "Fitness", ax=ax, grid=False)
-# # fig, ax = plt.subplots(figsize=(8, 6))
-# # set_pub()
-# # sns.boxenplot(x="Time",y="Fitness",data = rehab_table)
-
-# out2 = FuncMultiCmpt(pmc='pmc', pair='unpair',
-#                       data=rehab_table, dv='Time', factor='Fitness')
-# # print(out2['res_tab'])
-# # print(out2['APA'])
-# out2['res_posthoc']
-# out2['res_posthoc']['p-unc'][0]
-# out2['res_posthoc']['p-adjust'][0]
-# out2['res_posthoc']['p-corr'][0]
-
-
-# =============================================================================
-# # Interactions and ANOVA
-# https://www.statsmodels.org/dev/examples/notebooks/generated/interactions_anova.html
-# url = "http://stats191.stanford.edu/data/salary.table"
-# fh = urlopen(url)
-# df = pd.read_table(fh)
-# out1 = FuncMultiCmpt(pmc='pmc', pair='unpaired', data=df,
-#                      dv='S', factor=['X', 'E', 'M'], group='M')
-# # # two-way anova
-# # https://www.statology.org/two-way-anova-python/
-# # =============================================================================
-# # df = pd.DataFrame({'water': np.repeat(['daily', 'weekly'], 15),
-# #                    'sun': np.tile(np.repeat(['low', 'med', 'high'], 5), 2),
-# #                    'height': [6, 6, 6, 5, 6, 5, 5, 6, 4, 5,
-# #                               6, 6, 7, 8, 7, 3, 4, 4, 4, 5,
-# #                               4, 4, 4, 4, 4, 5, 6, 6, 7, 8]})
-# # out1 = FuncMultiCmpt(pmc='pmc', pair='unpaired', data=df,
-# #                       dv='height', factor=['water','sun'],group='water')
-
-
-# =============================================================================
-# # two way anova
-# https://www.geeksforgeeks.org/how-to-perform-a-two-way-anova-in-python/
-# =============================================================================
-# df1=pd.DataFrame({'Fertilizer': np.repeat(['daily', 'weekly'], 15),
-#                           'Watering': np.repeat(['daily', 'weekly'], 15),
-#                           'height': [14, 16, 15, 15, 16, 13, 12, 11,
-#                                       14, 15, 16, 16, 17, 18, 14, 13,
-#                                       14, 14, 14, 15, 16, 16, 17, 18,
-#                                       14, 13, 14, 14, 14, 15]})
-
-# df1['subject'] = np.tile(range(0, 15), (1, 2)).T
-# out1 = FuncMultiCmpt(pmc='pmc', pair='unpaired', data=df1,
-#                       dv='height', factor=['Fertilizer','Watering'],group='Watering')
-# # print(out1['stat'])
-# # print(out1['res_tab'])
-
-# =============================================================================
-# # welch anova
-# https://www.geeksforgeeks.org/how-to-perform-welchs-anova-in-python/
-# =============================================================================
-# df = pd.DataFrame({'score': [64, 66, 68, 75, 78, 94, 98, 79, 71, 80,
-#                              91, 92, 93, 90, 97, 94, 82, 88, 95, 96,
-#                              79, 78, 88, 94, 92, 85, 83, 85, 82, 81],
-#                    'group': np.repeat(['strat1', 'strat2', 'strat3'],repeats=10)})
-# out1 = FuncMultiCmpt(pmc='auto',pair='unpaired',data=df, dv='score', factor='group', group='group')
-# =============================================================================
-# # two way anova
-# https://www.statology.org/two-way-anova-python/
-# =============================================================================
-# df = pd.DataFrame({'water': np.repeat(['daily', 'weekly'], 15),
-#                    'sun': np.tile(np.repeat(['low', 'med', 'high'], 5), 2),
-#                    'height': [6, 6, 6, 5, 6, 5, 5, 6, 4, 5,
-#                               6, 6, 7, 8, 7, 3, 4, 4, 4, 5,
-#                               4, 4, 4, 4, 4, 5, 6, 6, 7, 8]})
-# df['subject'] = np.tile(range(0, 15), (1, 2)).T
-# out1 = FuncMultiCmpt(pmc='pmc', pair='unpaired', data=df,
-#                      dv='height', factor=['water', 'sun'], subject='subject', group='water')
-# # print(out1['stat'])
-# # print(out1['res_tab'])
-
-# =============================================================================
-# # 3-way ANOVA
-# =============================================================================
-# df = pd.DataFrame({'program': np.repeat([1, 2], 20),
-#                    'gender': np.tile(np.repeat(['M', 'F'], 10), 2),
-#                    'division': np.tile(np.repeat([1, 2], 5), 4),
-#                    'height': [7, 7, 8, 8, 7, 6, 6, 5, 6, 5,
-#                               5, 5, 4, 5, 4, 3, 3, 4, 3, 3,
-#                               6, 6, 5, 4, 5, 4, 5, 4, 4, 3,
-#                               2, 2, 1, 4, 4, 2, 1, 1, 2, 1]})
-# df['subject'] = np.tile(range(0, 20), (1, 2)).T
-# out1 = FuncMultiCmpt(pmc='pmc', pair='unpaired', data=df,
-#                      dv='height', factor=['gender', 'program', 'division'], subject='subject', group='program')
-# # print(out1['stat'])
-# # print(out1['res_tab'])
-
-# =============================================================================
-# # Repeated Measures ANOVA in Python
-# =============================================================================
-# df = pd.DataFrame({'patient': np.repeat([1, 2, 3, 4, 5], 4),
-#                     'drug': np.tile([1, 2, 3, 4], 5),
-#                     'response': [30, 28, 16, 34,
-#                                 14, 18, 10, 22,
-#                                 24, 20, 18, 30,
-#                                 38, 34, 20, 44,
-#                                 26, 28, 14, 30]})
-# # df['subject'] = np.tile(range(0, 20), (1, 2)).T
-# out1 = FuncMultiCmpt(pmc='pmc', pair='paired', data=df,
-#                       dv='response', factor=['drug'], subject='patient', group='drug')
-# print(out1['stat'])
-# print(out1['res_tab'])
-# print(out1['APA'])
-
-# =============================================================================
-# # repeated anova
-# https://www.geeksforgeeks.org/how-to-perform-a-repeated-measures-anova-in-python/
-# =============================================================================
-# df = pd.DataFrame({'Cars': np.repeat([1, 2, 3, 4, 5], 4),
-#                'Engine Oil': np.tile([1, 2, 3, 4], 5),
-#                'Mileage': [36, 38, 30, 29,
-#                            34, 38, 30, 29,
-#                            34, 28, 38, 32,
-#                            38, 34, 20, 44,
-#                            26, 28, 34, 50]})
-# out1 = FuncMultiCmpt(pmc='pmc', pair='paired', data=df,
-#                  dv='Mileage', factor=['Engine Oil'], subject='Cars', group='Cars')
-# =============================================================================
-# #two-way repeated anova
-# =============================================================================
-# df = pd.read_csv(
-#     "https://reneshbedre.github.io/assets/posts/anova/plants_leaves_two_within.csv")
-# df
-# # df['subject'] = np.tile(range(0, 20), (1, 2)).T
-# out1 = FuncMultiCmpt(pmc='pmc', pair='paired', data=df,
-#                       dv='num_leaves', factor=['year', 'time'], subject='plants', group='year')
-# print(out1['stat'])
-# print(out1['res_tab'])
-# print(out1['APA'])
-
-# =============================================================================
-# # repeated anova
-# =============================================================================
-# df = pd.read_csv('/Users/macjianfeng/Desktop/test.csv')
-# df.head()
-# df.loc[df['animal'].str.contains('Sleep'), 'experiment'] = 'sleep'
-# df.loc[df['animal'].str.contains('Wake'), 'experiment'] = 'wake'
-# df.loc[df['variable'].str.contains('hypo'), 'region'] = 'hypo'
-# df.loc[df['variable'].str.contains('cort'), 'region'] = 'cort'
-# df
-# for i in range(4):
-#     match i:
-#         case 0:
-#             prot_name = 'A1'
-#         case 1:
-#             prot_name = 'A2'
-#         case 2:
-#             prot_name = '845'
-#         case 3:
-#             prot_name = '831'
-#     df_tmp = df[df["variable"].str.contains(prot_name)]
-#     df_tmp['protein'] = prot_name
-#     df_tmp = df_tmp.reset_index()
-#     print(df_tmp)
-
-# out1 = FuncMultiCmpt(pmc='pmc', pair='mix', data=df_tmp,
-#                      dv='value', between='experiment', within='region', subject='animal', group='experiment')
-# print(out1['stat'])
-# print(out1['res_tab'])
-# # =============================================================================
-# One-way ANOVA
-# df1 = pd.read_csv('/Users/macjianfeng/Desktop/Book2.csv')
-# df2 = df1.melt()
-# out1 = FuncMultiCmpt(pmc='npmc', pair='unpaired', data=df2,
-#                      dv='libido', factor=['brand x', 'brand y', 'brand z'], subject='participant')
-# print(out1['stat'])
-# print(out1['res_tab'])
-# =============================================================================
-
-
-# =============================================================================
-# # #One-way ANOVA new example: https://www.pythonfordatascience.org/anova-python/
-# =============================================================================
-# df1 = pd.read_csv(
-#     "https://raw.githubusercontent.com/researchpy/Data-sets/master/difficile.csv")
-# df1.drop('person', axis=1, inplace=True)
-# # Recoding value from numeric to string
-# df1['dose'].replace({1: 'placebo', 2: 'low', 3: 'high'}, inplace=True)
-# df1.head(10)
-
-# out3= FuncMultiCmpt(pmc='pmc', data=df1, dv='libido', factor='dose')
-# # print(out3['res_tab'])
-# # # print(out3['res_posthoc'])
-# # print(out3['APA'])
-
-# =============================================================================
-# https://lifewithdata.com/2023/06/08/how-to-perform-a-two-way-anova-in-python/
-# =============================================================================
-# data = {
-#     'Diet': ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C'],
-#     'Workout': ['Low', 'Medium', 'High', 'Low', 'Medium', 'High', 'Low', 'Medium', 'High', 'Low', 'Medium', 'High'],
-#     'WeightLoss': [3, 4, 5, 3.2, 5, 6, 5.2, 6, 5.5, 4, 5.5, 6.2]
-# }
-# df = pd.DataFrame(data)
-# out4= FuncMultiCmpt(pmc='pmc', pair='unpaired',data=df, dv='WeightLoss', factor=['Diet','Workout'],group='Diet')
-
-# =============================================================================
-# # convert to list to string
-# =============================================================================
-
-
+ 
 def sort_rows_move_nan(arr, sort=False):
     # Handle edge cases where all values are NaN
     if np.all(np.isnan(arr)):
@@ -1109,11 +904,11 @@ def sort_rows_move_nan(arr, sort=False):
     return clean_arr_
 
 
-def df2array(data: pd.DataFrame, x, y, hue=None, sort=False):
+def df2array(data: pd.DataFrame, x=None, y=None, hue=None, sort=False):
     if hue is None:
         a = []
         if sort:
-            np.sort(data[x].unique().tolist()).tolist()
+            cat_x=np.sort(data[x].unique().tolist()).tolist()
         else:
             cat_x = data[x].unique().tolist()
         for i, x_ in enumerate(cat_x):
@@ -1134,7 +929,6 @@ def df2array(data: pd.DataFrame, x, y, hue=None, sort=False):
                 a = padcat(a, new_, axis=0)
         return sort_rows_move_nan(a).T
 
-
 def array2df(data: np.ndarray):
     df = pd.DataFrame()
     df["group"] = (
@@ -1146,8 +940,6 @@ def array2df(data: np.ndarray):
     )
     df["value"] = data.reshape(-1, 1, order="F")
     return df
-
-
 def padcat(*args, fill_value=np.nan, axis=1, order="row"):
     """
     Concatenate vectors with padding.
